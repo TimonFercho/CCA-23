@@ -8,11 +8,11 @@ spec:
   template:
     spec:
       containers:
-      - image: anakli/cca:parsec_canneal
-        name: parsec-canneal
-        imagePullPolicy: Always
-        command: ["/bin/sh"]
-        args: ["-c", "./run -a run -S parsec -p canneal -i native -n 1"]
+        - image: anakli/cca:parsec_canneal
+          name: parsec-canneal
+          imagePullPolicy: Always
+          command: ["/bin/sh"]
+          args: ["-c", "./run -a run -S parsec -p canneal -i native -n 1"]
       restartPolicy: Never
       nodeSelector:
-        cca-project-nodetype: "parsec"
+        cca-project-nodetype: "node-c-8core"

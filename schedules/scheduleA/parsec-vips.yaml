@@ -8,11 +8,11 @@ spec:
   template:
     spec:
       containers:
-      - image: anakli/cca:parsec_vips
-        name: parsec-vips
-        imagePullPolicy: Always
-        command: ["/bin/sh"]
-        args: ["-c", "./run -a run -S parsec -p vips -i native -n 1"]
+        - image: anakli/cca:parsec_vips
+          name: parsec-vips
+          imagePullPolicy: Always
+          command: ["/bin/sh"]
+          args: ["-c", "./run -a run -S parsec -p vips -i native -n 1"]
       restartPolicy: Never
       nodeSelector:
-        cca-project-nodetype: "parsec"
+        cca-project-nodetype: "node-b-4core"

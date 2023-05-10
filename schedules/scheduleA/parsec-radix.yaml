@@ -8,11 +8,11 @@ spec:
   template:
     spec:
       containers:
-      - image: anakli/cca:splash2x_radix
-        name: parsec-radix
-        imagePullPolicy: Always
-        command: ["/bin/sh"]
-        args: ["-c", "./run -a run -S splash2x -p radix -i native -n 1"]
+        - image: anakli/cca:splash2x_radix
+          name: parsec-radix
+          imagePullPolicy: Always
+          command: ["/bin/sh"]
+          args: ["-c", "./run -a run -S splash2x -p radix -i native -n 1"]
       restartPolicy: Never
       nodeSelector:
-        cca-project-nodetype: "parsec"
+        cca-project-nodetype: "node-a-2core"
