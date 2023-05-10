@@ -8,8 +8,6 @@ from datetime import datetime
 ALL_BENCHMARKS = ['blackscholes', 'canneal', 'dedup', 'ferret', 'freqmine', 'radix', 'vips']
 
 
-ALL_INTERFERENCES = ['none', 'cpu', 'l1d', 'l1i', 'l2', 'llc', 'membw']
-
 def spin_up_cluster(args):
     print(f">> Setting up part {args.task}")
     os.environ['KOPS_STATE_STORE'] = f'gs://{args.project}-{args.user}'
@@ -41,68 +39,6 @@ def spin_up_cluster(args):
 
     print(f">> Finished setting up part {args.task}")
 
-def run_part_2a(args):
-    print(">> Running part 2a")
-    benchmarks = args.benchmarks
-    if 'all' in args.benchmarks:
-        benchmarks = ALL_BENCHMARKS
-    
-    interferences = args.interferences
-    if 'all' in args.interferences:
-        interferences = ALL_INTERFERENCES
-
-    for benchmark in benchmarks:
-        for interference in interferences:
-            run_benchmark_with_interference(args, benchmark, interference)
-    
-    print(">> Finished running part 2a")
-
-def run_benchmark_with_interference(args, benchmark_short, interference_short):
-    benchmark = f"parsec-{benchmark_short}"
-    interference = f"ibench-{interference_short}"
-    print(f">> Running benchmark {benchmark} with interference {interference}")
-
-    print(">> Creating csv file for results")
-    create_csv_file(args)
-
-    if interference_short == 'none':
-        print(">> Skipping creation of interference")
-    else:
-        print(f">> Creating interference {interference}")
-        if does_pod_exist(interference):
-            print(f">> Interference {interference} already exists")
-        else:
-            subprocess.run(['kubectl', 'create', '-f', f'{args.cca_directory}/interference/{interference}.yaml'], check=True)
-        print(">> Waiting for interference pod to be ready")
-        subprocess.run(['kubectl', 'wait', '--for=condition=Ready', 'pod', interference], check=True, stdout=subprocess.PIPE)
-        print(">> Interference pod ready")
-
-    print(">> Creating benchmark")
-    subprocess.run(['kubectl', 'create', '-f', f'{args.cca_directory}/parsec-benchmarks/part2a/{benchmark}.yaml'], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if not does_pod_exist(benchmark):
-        print("!! Benchmark creation failed")
-        return
-
-    print(">> Waiting for benchmark job to complete")
-    subprocess.run(['kubectl', 'wait', '--for=condition=complete', 'job', benchmark, f'--timeout={args.wait_timeout}s'], check=True, stdout=subprocess.PIPE)
-    print(">> Benchmark completed")
-    
-    print(">> Collecting benchmark results")
-    benchmark_pod = get_pod_info(benchmark)
-    pod_name = benchmark_pod['NAME']
-    result = subprocess.run(['kubectl', 'logs', pod_name], check=True, stdout=subprocess.PIPE)
-    real_ms, user_ms, sys_ms = parse_execution_times(result)
-    print(f">> Real: {real_ms} ms, User: {user_ms} ms, Sys: {sys_ms} ms")
-
-    print(">> Appending benchmark results to csv file")
-    append_result_to_csv(args, benchmark_short, real_ms, user_ms, sys_ms, interference=interference_short)
-
-    print(">> Deleting all benchmarking jobs")
-    subprocess.run(['kubectl', 'delete', 'jobs', '--all'], check=True, stdout=subprocess.PIPE)
-
-    if not interference_short == 'none':
-        print(">> Deleting all interference pods")
-        subprocess.run(['kubectl', 'delete', 'pods', '--all'], check=True, stdout=subprocess.PIPE)
 
 def run_benchmark_with_threads(args, benchmark_short, n_threads):
     benchmark = f"parsec-{benchmark_short}"
