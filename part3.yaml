@@ -13,40 +13,40 @@ spec:
   cloudConfig:
     gceServiceAccount: default
   cloudProvider: gce
-  configBase: gs://<your-gs-bucket>/part3.k8s.local
+  configBase: gs://cca-eth-2023-group-29-dafeng/part3.k8s.local
   containerRuntime: docker
   etcdClusters:
-  - cpuRequest: 200m
-    etcdMembers:
-    - instanceGroup: master-europe-west3-a
-      name: a
-    memoryRequest: 100Mi
-    name: main
-  - cpuRequest: 100m
-    etcdMembers:
-    - instanceGroup: master-europe-west3-a
-      name: a
-    memoryRequest: 100Mi
-    name: events
+    - cpuRequest: 200m
+      etcdMembers:
+        - instanceGroup: master-europe-west3-a
+          name: a
+      memoryRequest: 100Mi
+      name: main
+    - cpuRequest: 100m
+      etcdMembers:
+        - instanceGroup: master-europe-west3-a
+          name: a
+      memoryRequest: 100Mi
+      name: events
   iam:
     allowContainerRegistry: true
     legacy: false
   kubelet:
     anonymousAuth: false
   kubernetesApiAccess:
-  - 0.0.0.0/0
+    - 0.0.0.0/0
   kubernetesVersion: 1.23.16
   masterPublicName: api.part3.k8s.local
   networking:
     kubenet: {}
   nonMasqueradeCIDR: 100.64.0.0/10
-  project: <your-cloud-computing-architecture-gcp-project>
+  project: cca-eth-2023-group-29
   sshAccess:
-  - 0.0.0.0/0
+    - 0.0.0.0/0
   subnets:
-  - name: europe-west3
-    region: europe-west3
-    type: Public
+    - name: europe-west3
+      region: europe-west3
+      type: Public
   topology:
     dns:
       type: Public
@@ -54,7 +54,6 @@ spec:
     nodes: public
 
 ---
-
 apiVersion: kops.k8s.io/v1alpha2
 kind: InstanceGroup
 metadata:
@@ -72,12 +71,11 @@ spec:
     kops.k8s.io/instancegroup: master-europe-west3-a
   role: Master
   subnets:
-  - europe-west3
+    - europe-west3
   zones:
-  - europe-west3-a
+    - europe-west3-a
 
 ---
-
 apiVersion: kops.k8s.io/v1alpha2
 kind: InstanceGroup
 metadata:
@@ -96,11 +94,10 @@ spec:
     cca-project-nodetype: "client-measure"
   role: Node
   subnets:
-  - europe-west3
+    - europe-west3
   zones:
-  - europe-west3-a
+    - europe-west3-a
 ---
-
 apiVersion: kops.k8s.io/v1alpha2
 kind: InstanceGroup
 metadata:
@@ -119,12 +116,11 @@ spec:
     cca-project-nodetype: "client-agent-a"
   role: Node
   subnets:
-  - europe-west3
+    - europe-west3
   zones:
-  - europe-west3-a
+    - europe-west3-a
 
 ---
-
 apiVersion: kops.k8s.io/v1alpha2
 kind: InstanceGroup
 metadata:
@@ -143,9 +139,9 @@ spec:
     cca-project-nodetype: "client-agent-b"
   role: Node
   subnets:
-  - europe-west3
+    - europe-west3
   zones:
-  - europe-west3-a
+    - europe-west3-a
 
 ---
 apiVersion: kops.k8s.io/v1alpha2
@@ -166,9 +162,9 @@ spec:
     cca-project-nodetype: "node-a-2core"
   role: Node
   subnets:
-  - europe-west3
+    - europe-west3
   zones:
-  - europe-west3-a
+    - europe-west3-a
 
 ---
 apiVersion: kops.k8s.io/v1alpha2
@@ -189,9 +185,9 @@ spec:
     cca-project-nodetype: "node-b-4core"
   role: Node
   subnets:
-  - europe-west3
+    - europe-west3
   zones:
-  - europe-west3-a
+    - europe-west3-a
 
 ---
 apiVersion: kops.k8s.io/v1alpha2
@@ -212,6 +208,6 @@ spec:
     cca-project-nodetype: "node-c-8core"
   role: Node
   subnets:
-  - europe-west3
+    - europe-west3
   zones:
-  - europe-west3-a
+    - europe-west3-a
