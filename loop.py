@@ -19,10 +19,9 @@ ALL_BENCHMARKS = [
 
 def run_part_3():
     print(">> Running part 3")
-    schedule_dir = "schedules"
-    schedule_name = "scheduleA"
+    schedule_dir = f"schedules/scheduleA"
 
-    json_file_path = f"{schedule_dir}/{schedule_name}.json"
+    json_file_path = f"{schedule_dir}/scheduleA.json"
 
     with open(json_file_path, "r") as j:
         schedule = json.loads(j.read())
@@ -31,15 +30,30 @@ def run_part_3():
 
     running_jobs = {}
 
+
+    run_cursor = {}
+    for node_id, node_schedule in enumerate(schedule):
+        current_cursor = {}
+        for run_id, run in enumerate(node_schedule['runs']):
+            current_cursor[run_id] = 0
+        run_cursor[node_id] = current_cursor
+
+    print(run_cursor)
+
     # hard coded the while loop to 8 for part 3 because there are 8 total jobs running
     while num_jobs_done != 8:
         for node_id, node_schedule in enumerate(schedule):
-            for run_id, run in enumerate(node_schedule.runs):
-                if not run:
+            for run_id, run in enumerate(node_schedule['runs']):
+
+                idx = run_cursor[node_id][run_id]
+
+                # stop condition
+                if idx >= len(schedule[node_id]['runs'][run_id]):
                     continue
-                job = run[0]
+                
+                job = run[idx]
                 # if does_pod_exist(job):
-                if running_jobs[job] is not None and running_jobs[job] == 1:
+                if job in running_jobs.keys() and running_jobs[job] == 1:
                     # info = get_pod_info(job)
 
                     info = {}
@@ -59,13 +73,17 @@ def run_part_3():
 
                     if is_complete:
                         # job is done, so we remove it from the queue
-                        print(schedule[node_id].runs[run_id])
-                        schedule[node_id].runs[run_id].pop(0)
-                        print(schedule[node_id].runs[run_id])
-                        job = run[0]
-                        print(run)
+                        print(schedule[node_id]['runs'][run_id])
+                        #schedule[node_id]['runs'][run_id].pop(0)
 
                         running_jobs[job] = 0
+                        print(f">> Job/{job} succeeded")
+                        run_cursor[node_id][run_id] = idx + 1
+                        
+                        job = run[idx]
+
+                        #print(schedule[node_id]['runs'][run_id])
+                        #print(run)
 
                         num_jobs_done += 1
 
@@ -76,8 +94,8 @@ def run_part_3():
 
                         running_jobs[job] = 0
 
-                if not run:
-                    # no more jobs to run
+                # stop condition
+                if idx >= len(schedule[node_id]['runs'][run_id]):
                     continue
 
                 # we still have a job left to run

@@ -132,6 +132,18 @@ def run_benchmark_with_threads(args, benchmark_short, n_threads):
     )
 
 
+def log_job_time():
+ 
+    subprocess.run(
+        ["kubectl", "get", "pods", "-o", "json", ">", "results.json"]
+    )
+    subprocess.run(
+        ["python3", "get_time.py", "results.json"],
+    )
+    
+
+
+
 def create_modified_config_file(args, benchmark, n_threads):
     with open(
         f"{args.cca_directory}/parsec-benchmarks/part2b/{benchmark}.yaml", "r"
@@ -165,7 +177,7 @@ def tear_down_cluster(args):
 
 def run_part_3(args):
     print(">> Running part 3")
-    schedule_dir = f"schedules"
+    schedule_dir = f"schedules/{args.schedule}"
 
     json_file_path = f"{schedule_dir}/{args.schedule}.json"
 
@@ -174,38 +186,47 @@ def run_part_3(args):
 
     num_jobs_done = 0
 
-    running_jobs = {}
+    # instead of popping from job lists, we update an external cursor 
+    # to avoid cahnging structures while iterating through them
+    run_cursor = {}
+    for node_id, node_schedule in enumerate(schedule):
+        current_cursor = {}
+        for run_id, run in enumerate(node_schedule['runs']):
+            current_cursor[run_id] = 0
+        run_cursor[node_id] = current_cursor
 
     # hard coded the while loop to 8 for part 3 because there are 8 total jobs running
     while num_jobs_done != 8:
         for node_id, node_schedule in enumerate(schedule):
-            for run_id, run in enumerate(node_schedule.runs):
-                if not run:
+            for run_id, run in enumerate(node_schedule['runs']):
+
+                idx = run_cursor[node_id][run_id]
+
+                # stop condition
+                if idx >= len(schedule[node_id]['runs'][run_id]):
                     continue
-                job = run[0]
-                # if does_pod_exist(job):
-                if running_jobs[job] is not None and running_jobs[job] == 1:
+
+                job = run[idx]
+
+                if does_pod_exist(job):
+                #if running_jobs[job] is not None and running_jobs[job] == 1:
                     info = get_pod_info(job)
                     is_running = (
                         info["STATUS"] == "Running"
-                    )  # TODO: check if job is running based on info
+                    ) 
                     if is_running:
                         # come back later to check if job is complete
                         continue
 
                     is_complete = (
                         info["STATUS"] == "Succeeded"
-                    )  # TODO: check if job is complete based on info
+                    ) 
 
                     if is_complete:
                         # job is done, so we remove it from the queue
-                        print(schedule[node_id].runs[run_id])
-                        schedule[node_id].runs[run_id].pop(0)
-                        print(schedule[node_id].runs[run_id])
-                        job = run[0]
-                        print(run)
-
-                        running_jobs[job] = 0
+                        run_cursor[node_id][run_id] = idx + 1
+                        print(f">> Job/{job} succeeded")
+                        job = run[idx]
 
                         num_jobs_done += 1
 
@@ -214,19 +235,22 @@ def run_part_3(args):
                         num_jobs_done += 1
                         print(f">> Job/{job_name} failed")
 
-                        running_jobs[job] = 0
 
-                if not run:
-                    # no more jobs to run
+                # stop condition
+                if idx >= len(schedule[node_id]['runs'][run_id]):
                     continue
 
                 # we still have a job left to run
                 # start job
                 else:
-                    running_jobs[job] = 1
+                    subprocess.run(['kubectl', 'create', '-f', f'{args.cca_directory}/{schedule_dir}/{job}.yaml'], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    if not does_pod_exist(job):
+                        print(f"!! Job creation failed for: {job}")
+                        continue 
 
         # TODO: introduce some delay?
-
+        
+    log_job_time()
     print(">> Part 3 completed")
 
 
@@ -320,12 +344,10 @@ def get_total_ms(execution_time):
 
 
 def create_csv_file(args):
-    if args.task == "2a":
+    if args.task == "3":
         header = (
-            "timestamp,cluster_name,benchmark,interference,real_ms,user_ms,sys_ms\n"
+            "timestamp,cluster_name,node,job,real_ms,user_ms,sys_ms\n"
         )
-    elif args.task == "2b":
-        header = "timestamp,cluster_name,benchmark,n_threads,real_ms,user_ms,sys_ms\n"
     else:
         raise ValueError(f"Invalid task: {args.task}")
     if not os.path.exists(args.output):
