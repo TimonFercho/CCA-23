@@ -5,6 +5,8 @@ import argparse
 import re
 from datetime import datetime
 import json
+import get_time
+import paramiko
 
 ALL_BENCHMARKS = [
     "blackscholes",
@@ -15,6 +17,16 @@ ALL_BENCHMARKS = [
     "radix",
     "vips",
 ]
+
+client_a = client_b = client_measure = None
+client_agent_a_info = client_agent_b_info = client_measure_info = {}
+
+client_command = "sudo apt-get update \n"
++ "sudo apt-get install libevent-dev libzmq3-dev git make g++ --yes \n"
++ "sudo apt-get build-dep memcached --yes \n"
++ "git clone https://github.com/eth-easl/memcache-perf-dynamic.git \n"
++ "cd memcache-perf-dynamic \n"
++ "make"
 
 
 def spin_up_cluster(args):
@@ -43,19 +55,70 @@ def spin_up_cluster(args):
         subprocess.run(["kops", "validate", "cluster", "--wait", "10m"], check=True)
         print(">> Cluster deployed successfully")
 
-    print(">> Labeling parsec server node")
-    parsec_node_name = get_node_info("parsec-server")["NAME"]
-    subprocess.run(
-        ["kubectl", "label", "nodes", parsec_node_name, "cca-project-nodetype=parsec"],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    parsec_node = get_node_info("parsec-server")
-    parsec_node_labels = get_node_info("parsec-server")["LABELS"]
-    if not "cca-project-nodetype=parsec" in parsec_node_labels:
-        print(">> Failed to add label")
-        return
+    # Setup for mcperf clients
+
+    client_agent_a_info= get_node_info("client-agent-a")
+    client_agent_a_name=client_agent_a_info["NAME"]
+    client_agent_a_IP=client_agent_a_info["INTERNAL-IP"]
+
+    client_agent_b_info= get_node_info("client-agent-b")
+    client_agent_b_name=client_agent_b_info["NAME"]
+    client_agent_b_IP=client_agent_b_info["INTERNAL-IP"]
+    
+    client_measure_info= get_node_info("client-measure")
+    client_measure_name=client_measure_info["NAME"]
+    client_measure_IP=client_measure_info["INTERNAL-IP"]
+
+    #TODO: validate the correctess of this approach 
+    # - what will the username be? can we test whether this works without running everything?
+
+
+    # Connecting to client A
+    client_a = paramiko.SSHClient()
+    client_a.load_system_host_keys()
+    client_a.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
+    client_a.connect(f"ubuntu@{client_agent_a_name}", username=myuser, key_filename=args.ssh_key_file) # no passwd needed
+
+    (stdin, stdout, stderr) = client_a.exec_command(client_command)
+    cmd_output = stdout.read()
+    print('Setup log for client A: ', client_command, cmd_output)
+
+    # Connecting to client B
+    client_b = paramiko.SSHClient()
+    client_b.load_system_host_keys()
+    client_b.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
+    client_b.connect(f"ubuntu@{client_agent_b_name}", username=myuser, key_filename=args.ssh_key_file) # no passwd needed
+
+    (stdin, stdout, stderr) = client_b.exec_command(client_command)
+    cmd_output = stdout.read()
+    print('Setup log for client B: ', client_command, cmd_output)
+
+    # Connecting to client measure
+    client_measure = paramiko.SSHClient()
+    client_measure.load_system_host_keys()
+    client_measure.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
+    client_measure.connect(f"ubuntu@{client_measure_name}", username=myuser, key_filename=args.ssh_key_file) # no passwd needed
+
+    (stdin, stdout, stderr) = client_measure.exec_command(client_command)
+    cmd_output = stdout.read()
+    print('Setup log for client measure: ', client_command, cmd_output)
+
+
+    #print(">> Labeling parsec server node")
+    #parsec_node_name = get_node_info("parsec-server")["NAME"]
+    #subprocess.run(
+    #    ["kubectl", "label", "nodes", parsec_node_name, "cca-project-nodetype=parsec"],
+    #    check=True,
+    #    stdout=subprocess.PIPE,
+    #    stderr=subprocess.PIPE,
+    #)
+    #parsec_node = get_node_info("parsec-server")
+    #parsec_node_labels = get_node_info("parsec-server")["LABELS"]
+    #if not "cca-project-nodetype=parsec" in parsec_node_labels:
+    #    print(">> Failed to add label")
+    #    return
+
+
 
     print(f">> Finished setting up part {args.task}")
 
@@ -137,9 +200,8 @@ def log_job_time():
     subprocess.run(
         ["kubectl", "get", "pods", "-o", "json", ">", "results.json"]
     )
-    subprocess.run(
-        ["python3", "get_time.py", "results.json"],
-    )
+
+    get_time.get_time()
     
 
 
@@ -173,6 +235,35 @@ def tear_down_cluster(args):
         ["kops", "delete", "cluster", args.cluster_name, "--yes"], check=True
     )
     print(">> Cluster deleted successfully")
+
+
+
+def start_mcperf(memcached_ip):
+    client_agent_a_name=client_agent_a_info["NAME"]
+    client_agent_a_IP=client_agent_a_info["INTERNAL-IP"]
+
+    client_agent_b_name=client_agent_b_info["NAME"]
+    client_agent_b_IP=client_agent_b_info["INTERNAL-IP"]
+
+    client_measure_name=client_measure_info["NAME"]
+    client_measure_IP=client_measure_info["INTERNAL-IP"]
+
+    (stdin, stdout, stderr) = client_a.exec_command("./mcperf -T 2 -A")
+    cmd_output = stdout.read()
+    print('client A begins mcperf: ', client_command, cmd_output)
+
+    (stdin, stdout, stderr) = client_b.exec_command("./mcperf -T 4 -A")
+    cmd_output = stdout.read()
+    print('client B begins mcperf: ', client_command, cmd_output)  
+
+    client_measure_command = f"./mcperf -s {memcached_ip} --loadonly /n"
+    +  f"./mcperf -s {memcached_ip} -a {client_agent_a_IP} -a {client_agent_b_IP} "
+    +   "--noload -T 6 -C 4 -D 4 -Q 1000 -c 4 -t 10 --scan 30000:30500:5"
+
+    (stdin, stdout, stderr) = client_measure.exec_command(client_measure_command)
+    cmd_output = stdout.read()
+    print('client measure begins mcperf: ', client_measure_command, cmd_output) 
+
 
 
 def run_part_3(args):
@@ -248,10 +339,39 @@ def run_part_3(args):
                         print(f"!! Job creation failed for: {job}")
                         continue 
 
+                    if job == "memcache-t1-cpuset":
+                        # retrieving IP for memcached and starting mcperfs
+                        info = get_pod_info(job)
+                        start_mcperf(info["IP"])
+
         # TODO: introduce some delay?
-        
+
     log_job_time()
-    print(">> Part 3 completed")
+    print(">> Parsec job logs Saved")
+
+    print(">> Collecting mcperf results")
+    get_mcperf_logs(args)
+
+
+# writing full mcperf log output
+def get_mcperf_logs(args):
+
+    #TODO: how to retreive logs from mcperf
+
+    #benchmark_pod = get_pod_info(benchmark)
+    #pod_name = benchmark_pod["NAME"]
+    #result = subprocess.run(
+    #    ["kubectl", "logs", pod_name], check=True, stdout=subprocess.PIPE
+    #) 
+    output = result.stdout.decode("utf-8") 
+    print(output)
+    print(">> Saving to txt file")
+
+    txt_filename = f"mcperf-part{args.task}.txt"
+
+    with open(txt_filename, 'w') as f:
+        f.write(output)
+
 
 
 def does_cluster_exist(cluster_name):
@@ -407,6 +527,14 @@ if __name__ == "__main__":
         default="cloud-comp-arch-project",
         help="Directory containing the project files",
     )
+    parser.add_argument(
+        "-d",
+        "--ssh-key-file",
+        type=str,
+        default="~/.ssh/cloud-computing",
+        help="The path to the ssh key for cloud computing",
+    )
+
     parser.add_argument("-c", "--cluster-name", type=str, default="part3.k8s.local")
     parser.add_argument(
         "-k",
