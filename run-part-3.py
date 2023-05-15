@@ -21,17 +21,19 @@ ALL_BENCHMARKS = [
 client_a = client_b = client_measure = None
 client_agent_a_info = client_agent_b_info = client_measure_info = {}
 
-client_command = "sudo apt-get update \n"
-+ "sudo apt-get install libevent-dev libzmq3-dev git make g++ --yes \n"
-+ "sudo apt-get build-dep memcached --yes \n"
-+ "git clone https://github.com/eth-easl/memcache-perf-dynamic.git \n"
-+ "cd memcache-perf-dynamic \n"
-+ "make"
+
+client_command = "sudo sh -c 'echo deb-src http://europe-west3.gce.archive.ubuntu.com/ubuntu/ bionic main restricted >> /etc/apt/sources.list' "
+client_command += "sudo apt-get update \n" 
+client_command += "sudo apt-get install libevent-dev libzmq3-dev git make g++ --yes \n"
+client_command += "sudo apt-get build-dep memcached --yes \n"
+client_command += "git clone https://github.com/eth-easl/memcache-perf-dynamic.git \n"
+client_command += "cd memcache-perf-dynamic \n"
+client_command += "make"
 
 
 def spin_up_cluster(args):
     print(f">> Setting up part {args.task}")
-    os.environ["KOPS_STATE_STORE"] = f"gs://{args.project}-{args.user}"
+    os.environ["KOPS_STATE_STORE"] = f"gs://{args.project}" # f"gs://{args.project}-{args.user}"
     os.environ["PROJECT"] = args.project
 
     print(">> Creating cluster")
@@ -59,15 +61,15 @@ def spin_up_cluster(args):
 
     client_agent_a_info= get_node_info("client-agent-a")
     client_agent_a_name=client_agent_a_info["NAME"]
-    client_agent_a_IP=client_agent_a_info["INTERNAL-IP"]
+    client_agent_a_IP=client_agent_a_info["EXTERNAL-IP"]
 
     client_agent_b_info= get_node_info("client-agent-b")
     client_agent_b_name=client_agent_b_info["NAME"]
-    client_agent_b_IP=client_agent_b_info["INTERNAL-IP"]
+    client_agent_b_IP=client_agent_b_info["EXTERNAL-IP"]
     
     client_measure_info= get_node_info("client-measure")
     client_measure_name=client_measure_info["NAME"]
-    client_measure_IP=client_measure_info["INTERNAL-IP"]
+    client_measure_IP=client_measure_info["EXTERNAL-IP"]
 
     #TODO: validate the correctess of this approach 
     # - what will the username be? can we test whether this works without running everything?
@@ -77,7 +79,7 @@ def spin_up_cluster(args):
     client_a = paramiko.SSHClient()
     client_a.load_system_host_keys()
     client_a.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
-    client_a.connect(f"ubuntu@{client_agent_a_name}", username=myuser, key_filename=args.ssh_key_file) # no passwd needed
+    client_a.connect(client_agent_a_IP, 22, username="ubuntu", key_filename=args.ssh_key_file) # no passwd needed
 
     (stdin, stdout, stderr) = client_a.exec_command(client_command)
     cmd_output = stdout.read()
@@ -87,7 +89,7 @@ def spin_up_cluster(args):
     client_b = paramiko.SSHClient()
     client_b.load_system_host_keys()
     client_b.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
-    client_b.connect(f"ubuntu@{client_agent_b_name}", username=myuser, key_filename=args.ssh_key_file) # no passwd needed
+    client_b.connect(client_agent_b_IP, 22, username="ubuntu", key_filename=args.ssh_key_file) # no passwd needed
 
     (stdin, stdout, stderr) = client_b.exec_command(client_command)
     cmd_output = stdout.read()
@@ -97,7 +99,7 @@ def spin_up_cluster(args):
     client_measure = paramiko.SSHClient()
     client_measure.load_system_host_keys()
     client_measure.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
-    client_measure.connect(f"ubuntu@{client_measure_name}", username=myuser, key_filename=args.ssh_key_file) # no passwd needed
+    client_measure.connect(client_measure_IP, 22, username="ubuntu", key_filename=args.ssh_key_file) # no passwd needed
 
     (stdin, stdout, stderr) = client_measure.exec_command(client_command)
     cmd_output = stdout.read()
@@ -250,11 +252,11 @@ def start_mcperf(memcached_ip):
 
     (stdin, stdout, stderr) = client_a.exec_command("./mcperf -T 2 -A")
     cmd_output = stdout.read()
-    print('client A begins mcperf: ', client_command, cmd_output)
+    #print('client A begins mcperf: ', client_command, cmd_output)
 
     (stdin, stdout, stderr) = client_b.exec_command("./mcperf -T 4 -A")
     cmd_output = stdout.read()
-    print('client B begins mcperf: ', client_command, cmd_output)  
+    #print('client B begins mcperf: ', client_command, cmd_output)  
 
     client_measure_command = f"./mcperf -s {memcached_ip} --loadonly /n"
     +  f"./mcperf -s {memcached_ip} -a {client_agent_a_IP} -a {client_agent_b_IP} "
@@ -262,13 +264,18 @@ def start_mcperf(memcached_ip):
 
     (stdin, stdout, stderr) = client_measure.exec_command(client_measure_command)
     cmd_output = stdout.read()
-    print('client measure begins mcperf: ', client_measure_command, cmd_output) 
+    #print('client measure begins mcperf: ', client_measure_command, cmd_output) 
+
+    # return client measure stdout for later logging to file
+    return stdout
 
 
 
 def run_part_3(args):
     print(">> Running part 3")
     schedule_dir = f"schedules/{args.schedule}"
+
+    stdout_mcperf = None
 
     json_file_path = f"{schedule_dir}/{args.schedule}.json"
 
@@ -342,28 +349,28 @@ def run_part_3(args):
                     if job == "memcache-t1-cpuset":
                         # retrieving IP for memcached and starting mcperfs
                         info = get_pod_info(job)
-                        start_mcperf(info["IP"])
+                        stdout_mcperf = start_mcperf(info["IP"])
 
         # TODO: introduce some delay?
+    
+    if stdout_mcperf is None:
+        # raise error
+        print("No stdout for mcperf present")
+    else:
+        print(">> Collecting mcperf results")
+        save_mcperf_logs(stdout_mcperf)
 
     log_job_time()
     print(">> Parsec job logs Saved")
 
-    print(">> Collecting mcperf results")
-    get_mcperf_logs(args)
+    #print(">> Collecting mcperf results")
+    #get_mcperf_logs(args)
 
 
 # writing full mcperf log output
-def get_mcperf_logs(args):
+def save_mcperf_logs(stdout_mcperf):
 
-    #TODO: how to retreive logs from mcperf
-
-    #benchmark_pod = get_pod_info(benchmark)
-    #pod_name = benchmark_pod["NAME"]
-    #result = subprocess.run(
-    #    ["kubectl", "logs", pod_name], check=True, stdout=subprocess.PIPE
-    #) 
-    output = result.stdout.decode("utf-8") 
+    output = stdout_mcperf.decode("utf-8") 
     print(output)
     print(">> Saving to txt file")
 
@@ -528,7 +535,6 @@ if __name__ == "__main__":
         help="Directory containing the project files",
     )
     parser.add_argument(
-        "-d",
         "--ssh-key-file",
         type=str,
         default="~/.ssh/cloud-computing",
@@ -570,3 +576,10 @@ if __name__ == "__main__":
         tear_down_cluster(args)
     else:
         raise ValueError(f"Unknown task {args.task}")
+    
+
+# python run-part-3.py --cca-directory CCA-23  --user 21-950-795 --task 3
+#
+#
+#
+#
