@@ -18,7 +18,11 @@ ALL_BENCHMARKS = [
     "vips",
 ]
 
-client_a = client_b = client_measure = None
+client_a = paramiko.SSHClient()
+client_b = paramiko.SSHClient()
+client_measure = paramiko.SSHClient()
+
+#client_a = client_b = client_measure = None
 client_agent_a_info = client_agent_b_info = client_measure_info = {}
 
 
@@ -31,33 +35,10 @@ client_command += "cd memcache-perf-dynamic \n"
 client_command += "make"
 
 
-def spin_up_cluster(args):
-    print(f">> Setting up part {args.task}")
-    os.environ["KOPS_STATE_STORE"] = f"gs://{args.project}" # f"gs://{args.project}-{args.user}"
-    os.environ["PROJECT"] = args.project
 
-    print(">> Creating cluster")
-    if does_cluster_exist(args.cluster_name):
-        print(">> Cluster already exists")
-    else:
-        subprocess.run(
-            ["kops", "create", "-f", f"{args.cca_directory}/part{args.task}.yaml"],
-            check=True,
-        )
+def connect_mcperfs():
 
-    print(">> Deploying cluster")
-    if is_cluster_deployed(args.cluster_name):
-        print(">> Cluster already deployed")
-    else:
-        subprocess.run(
-            ["kops", "update", "cluster", args.cluster_name, "--yes", "--admin"],
-            check=True,
-        )
-        print(">> Waiting for cluster to be ready")
-        subprocess.run(["kops", "validate", "cluster", "--wait", "10m"], check=True)
-        print(">> Cluster deployed successfully")
-
-    # Setup for mcperf clients
+    print("connect_mcperfs")
 
     client_agent_a_info= get_node_info("client-agent-a")
     client_agent_a_name=client_agent_a_info["NAME"]
@@ -71,39 +52,71 @@ def spin_up_cluster(args):
     client_measure_name=client_measure_info["NAME"]
     client_measure_IP=client_measure_info["EXTERNAL-IP"]
 
-    #TODO: validate the correctess of this approach 
-    # - what will the username be? can we test whether this works without running everything?
-
-
     # Connecting to client A
-    client_a = paramiko.SSHClient()
-    client_a.load_system_host_keys()
+    #client_a.load_system_host_keys()
     client_a.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
     client_a.connect(client_agent_a_IP, 22, username="ubuntu", key_filename=args.ssh_key_file) # no passwd needed
 
-    (stdin, stdout, stderr) = client_a.exec_command(client_command)
-    cmd_output = stdout.read()
-    print('Setup log for client A: ', client_command, cmd_output)
-
     # Connecting to client B
-    client_b = paramiko.SSHClient()
-    client_b.load_system_host_keys()
+    #client_b.load_system_host_keys()
     client_b.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
     client_b.connect(client_agent_b_IP, 22, username="ubuntu", key_filename=args.ssh_key_file) # no passwd needed
 
-    (stdin, stdout, stderr) = client_b.exec_command(client_command)
-    cmd_output = stdout.read()
-    print('Setup log for client B: ', client_command, cmd_output)
 
     # Connecting to client measure
-    client_measure = paramiko.SSHClient()
-    client_measure.load_system_host_keys()
+    #client_measure.load_system_host_keys()
     client_measure.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
     client_measure.connect(client_measure_IP, 22, username="ubuntu", key_filename=args.ssh_key_file) # no passwd needed
 
-    (stdin, stdout, stderr) = client_measure.exec_command(client_command)
-    cmd_output = stdout.read()
-    print('Setup log for client measure: ', client_command, cmd_output)
+
+def spin_up_cluster(args, create_cluster=True, setup_mcperf=True):
+
+    if create_cluster:
+        print(f">> Setting up part {args.task}")
+        os.environ["KOPS_STATE_STORE"] =  f"gs://{args.project}-{args.user}"
+        os.environ["PROJECT"] = args.project
+
+        print(">> Creating cluster")
+        if does_cluster_exist(args.cluster_name):
+            print(">> Cluster already exists")
+        else:
+            subprocess.run(
+                ["kops", "create", "-f", f"{args.cca_directory}/part{args.task}.yaml"],
+                check=True,
+            )
+
+        print(">> Deploying cluster")
+        if is_cluster_deployed(args.cluster_name):
+            print(">> Cluster already deployed")
+        else:
+            subprocess.run(
+                ["kops", "update", "cluster", args.cluster_name, "--yes", "--admin"],
+                check=True,
+            )
+            print(">> Waiting for cluster to be ready")
+            subprocess.run(["kops", "validate", "cluster", "--wait", "10m"], check=True)
+            print(">> Cluster deployed successfully")
+
+    # Setup for mcperf clients
+
+    #TODO: validate the correctess of this approach 
+    # - what will the username be? can we test whether this works without running everything?
+
+    connect_mcperfs()
+
+    if setup_mcperf:
+
+        (stdin, stdout, stderr) = client_a.exec_command(client_command)
+        cmd_output = stdout.read()
+        print('Setup log for client A: ', client_command, cmd_output)
+
+        (stdin, stdout, stderr) = client_b.exec_command(client_command)
+        cmd_output = stdout.read()
+        print('Setup log for client B: ', client_command, cmd_output)
+
+        (stdin, stdout, stderr) = client_measure.exec_command(client_command)
+        cmd_output = stdout.read()
+        print('Setup log for client measure: ', client_command, cmd_output)
 
 
     #print(">> Labeling parsec server node")
@@ -263,7 +276,7 @@ def start_mcperf(memcached_ip):
     +   "--noload -T 6 -C 4 -D 4 -Q 1000 -c 4 -t 10 --scan 30000:30500:5"
 
     (stdin, stdout, stderr) = client_measure.exec_command(client_measure_command)
-    cmd_output = stdout.read()
+    #cmd_output = stdout.read()
     #print('client measure begins mcperf: ', client_measure_command, cmd_output) 
 
     # return client measure stdout for later logging to file
@@ -273,7 +286,7 @@ def start_mcperf(memcached_ip):
 
 def run_part_3(args):
     print(">> Running part 3")
-    schedule_dir = f"schedules/{args.schedule}"
+    schedule_dir = f"{args.cca_directory}/schedules/{args.schedule}"
 
     stdout_mcperf = None
 
@@ -537,7 +550,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--ssh-key-file",
         type=str,
-        default="~/.ssh/cloud-computing",
+        default="C:/Users/User/.ssh/cloud-computing",
         help="The path to the ssh key for cloud computing",
     )
 
@@ -578,7 +591,7 @@ if __name__ == "__main__":
         raise ValueError(f"Unknown task {args.task}")
     
 
-# python run-part-3.py --cca-directory CCA-23  --user 21-950-795 --task 3
+# python CCA-23/run-part-3.py --cca-directory CCA-23  --user mertugrul --task 3
 #
 #
 #
