@@ -38,7 +38,7 @@ client_command += "make"
 
 def connect_mcperfs():
 
-    print("connect_mcperfs")
+    print(">>> connecting to mcperfs")
 
     client_agent_a_info= get_node_info("client-agent-a")
     client_agent_a_name=client_agent_a_info["NAME"]
@@ -107,16 +107,16 @@ def spin_up_cluster(args, create_cluster=True, setup_mcperf=True):
     if setup_mcperf:
 
         (stdin, stdout, stderr) = client_a.exec_command(client_command)
-        cmd_output = stdout.read()
-        print('Setup log for client A: ', client_command, cmd_output)
+        stderr = stdout.read()
+        print('Setup log for client A: ', client_command, stderr)
 
         (stdin, stdout, stderr) = client_b.exec_command(client_command)
-        cmd_output = stdout.read()
-        print('Setup log for client B: ', client_command, cmd_output)
+        stderr = stdout.read()
+        print('Setup log for client B: ', client_command, stderr)
 
         (stdin, stdout, stderr) = client_measure.exec_command(client_command)
-        cmd_output = stdout.read()
-        print('Setup log for client measure: ', client_command, cmd_output)
+        stderr = stdout.read()
+        print('Setup log for client measure: ', client_command, stderr)
 
 
     #print(">> Labeling parsec server node")
@@ -354,7 +354,9 @@ def run_part_3(args):
                 # we still have a job left to run
                 # start job
                 else:
-                    subprocess.run(['kubectl', 'create', '-f', f'{args.cca_directory}/{schedule_dir}/{job}.yaml'], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    print(f">> Starting job {job} on node {node_id}")
+                    print(f">> kubectl create -f {args.cca_directory}/{schedule_dir}/{job}.yaml")
+                    subprocess.run(['kubectl', 'create', '-f', f'{args.cca_directory}/{schedule_dir}/{job}.yaml'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     if not does_pod_exist(job):
                         print(f"!! Job creation failed for: {job}")
                         continue 
