@@ -500,6 +500,32 @@ def create_csv_file(args):
         with open(args.output, "w") as f:
             f.write(header)
 
+def create_part3_yaml(args):
+    import fileinput
+
+    if os.path.exists(args.userYaml):
+        return
+
+    REPLACE_MAP = {
+        '<user>': args.user,
+    }
+
+    # Define the variable to replace '<user>'
+    replacement_variable = 'John Doe'
+
+    # Copy and rewrite the file
+    with fileinput.FileInput(args.sourceYaml) as file, open(args.userYaml, 'w') as output_file:
+        for line in file:
+            for placeholder, substitution in REPLACE_MAP.items():
+                line = line.replace(placeholder, substitution)
+            output_file.write(line)
+
+    print(f"File '{args.userYaml}' has been created.")
+
+def delete_part3_yaml(args):
+    if os.path.exists(args.userYaml):
+        os.remove(args.userYaml)
+        print(f"File '{args.userYaml}' has been removed.")
 
 def append_result_to_csv(
     args, benchmark, real, user, sys, interference=None, n_threads=None
@@ -586,19 +612,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args.cluster_name = f"part{args.task}.k8s.local"
     args.output = f"results-{args.task}.csv"
+    args.sourceYaml = f"{args.cca_directory}/part{args.task}.yaml"
+    args.userYaml = f"{args.cca_directory}/part{args.task}-{args.user}.yaml"
     if not os.path.isdir(parser.parse_args().cca_directory):
         print(f"Directory {parser.parse_args().cca_directory} does not exist")
         sys.exit(1)
     if args.task == "3":
+        create_part3_yaml(args)
         spin_up_cluster(args)
         run_part_3(args)
         tear_down_cluster(args)
+        delete_part3_yaml(args)
     else:
         raise ValueError(f"Unknown task {args.task}")
     
 
 # python CCA-23/run-part-3.py --cca-directory CCA-23  --user mertugrul --task 3
-#
-#
-#
-#

@@ -13,7 +13,7 @@ spec:
   cloudConfig:
     gceServiceAccount: default
   cloudProvider: gce
-  configBase: gs://cca-eth-2023-group-29-dafeng/part3.k8s.local
+  configBase: gs://cca-eth-2023-group-29-<user>/part3.k8s.local
   containerRuntime: docker
   etcdClusters:
     - cpuRequest: 200m
