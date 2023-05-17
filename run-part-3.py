@@ -8,6 +8,7 @@ import json
 import get_time
 import paramiko
 import time
+import pandas as pd
 
 ALL_BENCHMARKS = [
     "blackscholes",
@@ -212,13 +213,22 @@ def run_benchmark_with_threads(args, benchmark_short, n_threads):
     )
 
 
-def log_job_time():
+def log_job_time(schedule):
  
     subprocess.run(
         ["kubectl", "get", "pods", "-o", "json", ">", "results.json"]
     )
 
-    get_time.get_time("results.json")
+    parsec_df = get_time.get_time("results.json")
+
+    for node_id, node_schedule in enumerate(schedule):
+            for run_id, run in enumerate(node_schedule['runs']):
+                for job in run:
+                    parsec_df.loc[job]['machine'] = node_schedule['node']
+
+    parsec_df.to_csv('parsec_times.csv')
+
+
     
 
 
@@ -379,7 +389,7 @@ def run_part_3(args):
         print(">> Collecting mcperf results")
         save_mcperf_logs(stdout_mcperf)
 
-    log_job_time()
+    log_job_time(schedule)
     print(">> Parsec job logs Saved")
 
     #print(">> Collecting mcperf results")

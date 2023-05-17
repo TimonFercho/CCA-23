@@ -14,8 +14,8 @@ ALL_BENCHMARKS = [
 ]
 
 parsec_df = pd.DataFrame({'name': ALL_BENCHMARKS,
-                            "start": [0]*len(ALL_BENCHMARKS),
-                            "end": [0]*len(ALL_BENCHMARKS)})
+                            "start_time": [0]*len(ALL_BENCHMARKS),
+                            "end_time": [0]*len(ALL_BENCHMARKS)})
 
 
 def get_time(filepath):
@@ -55,10 +55,11 @@ def get_time(filepath):
 
     ref_time = min(start_times)
 
-    parsec_df = pd.DataFrame({'name': names,
-                            "start": [t - ref_time for t in start_times],
-                            "end": [t - ref_time for t in completion_time]  })
-    parsec_df.to_csv('parsec_times.csv')
+    #parsec_df.to_csv('parsec_times.csv')
 
     print("Total time: {0}".format(max(completion_times) - min(start_times)))
     file.close()
+
+    return  pd.DataFrame({'name': names,
+                            "start": [t - ref_time for t in start_times],
+                            "end": [t - ref_time for t in completion_time]  })
