@@ -1,6 +1,7 @@
 import json
 import sys
 from datetime import datetime
+import pandas as pd
 
 ALL_BENCHMARKS = [
     "blackscholes",
