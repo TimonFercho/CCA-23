@@ -1,0 +1,55 @@
+apiVersion: kops.k8s.io/v1alpha2
+kind: Cluster
+metadata:
+  creationTimestamp: "2023-05-15T16:21:28Z"
+  name: part3.k8s.local
+spec:
+  api:
+    loadBalancer:
+      type: Public
+  authorization:
+    rbac: {}
+  channel: stable
+  cloudConfig:
+    gceServiceAccount: default
+  cloudProvider: gce
+  configBase: gs://cca-eth-2023-group-29-dafeng/part3.k8s.local
+  containerRuntime: docker
+  etcdClusters:
+  - cpuRequest: 200m
+    etcdMembers:
+    - instanceGroup: master-europe-west3-a
+      name: a
+    memoryRequest: 100Mi
+    name: main
+  - cpuRequest: 100m
+    etcdMembers:
+    - instanceGroup: master-europe-west3-a
+      name: a
+    memoryRequest: 100Mi
+    name: events
+  iam:
+    allowContainerRegistry: true
+    legacy: false
+  kubelet:
+    anonymousAuth: false
+  kubernetesApiAccess:
+  - 0.0.0.0/0
+  kubernetesVersion: 1.23.16
+  masterPublicName: api.part3.k8s.local
+  networking:
+    kubenet: {}
+  nonMasqueradeCIDR: 100.64.0.0/10
+  project: cca-eth-2023-group-29
+  sshAccess:
+  - 0.0.0.0/0
+  subnets:
+  - cidr: 10.0.16.0/20
+    name: europe-west3
+    region: europe-west3
+    type: Public
+  topology:
+    dns:
+      type: Public
+    masters: public
+    nodes: public

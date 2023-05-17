@@ -1,0 +1,21 @@
+apiVersion: kops.k8s.io/v1alpha2
+kind: InstanceGroup
+metadata:
+  creationTimestamp: "2023-05-13T15:59:04Z"
+  labels:
+    kops.k8s.io/cluster: part3.k8s.local
+  name: client-agent-a
+spec:
+  image: ubuntu-os-cloud/ubuntu-1804-bionic-v20210211
+  machineType: e2-standard-2
+  maxSize: 1
+  minSize: 1
+  nodeLabels:
+    cca-project-nodetype: client-agent-a
+    cloud.google.com/metadata-proxy-ready: "true"
+    kops.k8s.io/instancegroup: nodes-europe-west3-a
+  role: Node
+  subnets:
+  - europe-west3
+  zones:
+  - europe-west3-a
