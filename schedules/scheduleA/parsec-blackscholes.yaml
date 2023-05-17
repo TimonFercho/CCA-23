@@ -15,7 +15,7 @@ spec:
           args:
             [
               "-c",
-              "taskset -c 0,1,2,3 ./parsec -a run -p blackscholes -i native -n 4",
+              "taskset -c 0,1,2,3 ./run -a run -S parsec -p blackscholes -i native -n 4",
             ]
       restartPolicy: Never
       nodeSelector:

@@ -38,7 +38,7 @@ client_command += "make"
 
 def connect_mcperfs():
 
-    print("connect_mcperfs")
+    print(">>> Setting up SSH connection to compile mcperf")
 
     client_agent_a_info= get_node_info("client-agent-a")
     client_agent_a_name=client_agent_a_info["NAME"]
@@ -55,18 +55,18 @@ def connect_mcperfs():
     # Connecting to client A
     #client_a.load_system_host_keys()
     client_a.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
-    client_a.connect(client_agent_a_IP, 22, username="ubuntu", key_filename=args.ssh_key_file) # no passwd needed
+    client_a.connect(client_agent_a_IP, 22, username="ubuntu") # no passwd needed
 
     # Connecting to client B
     #client_b.load_system_host_keys()
     client_b.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
-    client_b.connect(client_agent_b_IP, 22, username="ubuntu", key_filename=args.ssh_key_file) # no passwd needed
+    client_b.connect(client_agent_b_IP, 22, username="ubuntu") # no passwd needed
 
 
     # Connecting to client measure
     #client_measure.load_system_host_keys()
     client_measure.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
-    client_measure.connect(client_measure_IP, 22, username="ubuntu", key_filename=args.ssh_key_file) # no passwd needed
+    client_measure.connect(client_measure_IP, 22, username="ubuntu") # no passwd needed
 
 
 def spin_up_cluster(args, create_cluster=True, setup_mcperf=True):
@@ -107,16 +107,16 @@ def spin_up_cluster(args, create_cluster=True, setup_mcperf=True):
     if setup_mcperf:
 
         (stdin, stdout, stderr) = client_a.exec_command(client_command)
-        cmd_output = stdout.read()
-        print('Setup log for client A: ', client_command, cmd_output)
+        stderr = stdout.read()
+        print('Setup log for client A: ', client_command, stderr)
 
         (stdin, stdout, stderr) = client_b.exec_command(client_command)
-        cmd_output = stdout.read()
-        print('Setup log for client B: ', client_command, cmd_output)
+        stderr = stdout.read()
+        print('Setup log for client B: ', client_command, stderr)
 
         (stdin, stdout, stderr) = client_measure.exec_command(client_command)
-        cmd_output = stdout.read()
-        print('Setup log for client measure: ', client_command, cmd_output)
+        stderr = stdout.read()
+        print('Setup log for client measure: ', client_command, stderr)
 
 
     #print(">> Labeling parsec server node")
@@ -306,37 +306,37 @@ def run_part_3(args):
             current_cursor[run_id] = 0
         run_cursor[node_id] = current_cursor
 
-    # hard coded the while loop to 8 for part 3 because there are 8 total jobs running
-    while num_jobs_done != 8:
+    N_JOBS = 8
+    dispatched_jobs = []
+
+    while num_jobs_done != N_JOBS:
         for node_id, node_schedule in enumerate(schedule):
             for run_id, run in enumerate(node_schedule['runs']):
 
                 idx = run_cursor[node_id][run_id]
+                finished_run = idx >= len(run)
 
-                # stop condition
-                if idx >= len(schedule[node_id]['runs'][run_id]):
+                if finished_run:
                     continue
 
                 job = run[idx]
 
-                if does_pod_exist(job):
-                #if running_jobs[job] is not None and running_jobs[job] == 1:
+                if dispatched_jobs and does_pod_exist(job):
                     info = get_pod_info(job)
                     is_running = (
                         info["STATUS"] == "Running"
                     ) 
                     if is_running:
-                        # come back later to check if job is complete
+                        print(f">> Job {job} on node {node_id} is running")
                         continue
 
                     is_complete = (
-                        info["STATUS"] == "Succeeded"
+                        info["STATUS"] == "Completed"
                     ) 
 
                     if is_complete:
-                        # job is done, so we remove it from the queue
+                        print(f">> Job {job} on node {node_id} succeeded")
                         run_cursor[node_id][run_id] = idx + 1
-                        print(f">> Job/{job} succeeded")
                         job = run[idx]
 
                         num_jobs_done += 1
@@ -344,25 +344,21 @@ def run_part_3(args):
                     job_name = info["NAME"]
                     if info["STATUS"] == "Failed":
                         num_jobs_done += 1
-                        print(f">> Job/{job_name} failed")
+                        print(f">> Job {job_name} failed")
 
-
-                # stop condition
-                if idx >= len(schedule[node_id]['runs'][run_id]):
-                    continue
-
-                # we still have a job left to run
-                # start job
+                elif job not in dispatched_jobs:
+                    print(f">> Starting job {job} on node {node_id}")
+                    print(f">> kubectl create -f {args.cca_directory}/{schedule_dir}/{job}.yaml")
+                    subprocess.run(['kubectl', 'create', '-f', f'{args.cca_directory}/{schedule_dir}/{job}.yaml'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    dispatched_jobs.append(job)
                 else:
-                    subprocess.run(['kubectl', 'create', '-f', f'{args.cca_directory}/{schedule_dir}/{job}.yaml'], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    if not does_pod_exist(job):
-                        print(f"!! Job creation failed for: {job}")
-                        continue 
+                    print(f">> Job {job} is not alive (yet)")
 
-                    if job == "memcache-t1-cpuset":
-                        # retrieving IP for memcached and starting mcperfs
-                        info = get_pod_info(job)
-                        stdout_mcperf = start_mcperf(info["IP"])
+                    # TODO: handle this somewhere else when we know memcached is running
+                    # if job == "memcache-t1-cpuset":
+                    #     # retrieving IP for memcached and starting mcperfs
+                    #     info = get_pod_info(job)
+                    #     stdout_mcperf = start_mcperf(info["IP"])
 
         # TODO: introduce some delay?
     

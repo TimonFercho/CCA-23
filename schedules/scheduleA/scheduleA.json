@@ -1,7 +1,7 @@
 [
   {
     "node": "node-a-2core",
-    "runs": [["memcache-t1-cpuset"], ["parsec-radix"]]
+    "runs": [["some-memcached"], ["parsec-radix"]]
   },
   {
     "node": "node-b-4core",
