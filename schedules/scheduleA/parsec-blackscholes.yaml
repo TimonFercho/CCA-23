@@ -19,4 +19,4 @@ spec:
             ]
       restartPolicy: Never
       nodeSelector:
-        cca-project-nodetype: "node-b-4core"
+        cca-project-nodetype: "node-c-8core"

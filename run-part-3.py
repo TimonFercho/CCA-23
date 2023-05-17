@@ -9,6 +9,7 @@ import get_time
 import paramiko
 import time
 import pandas as pd
+import fileinput
 
 ALL_BENCHMARKS = [
     "blackscholes",
@@ -41,7 +42,7 @@ client_command += "make"
 
 def connect_mcperfs():
 
-    print(">>> Setting up SSH connection to compile mcperf")
+    print(">> Setting up SSH connection to compile mcperf")
 
     client_agent_a_info= get_node_info("client-agent-a")
     client_agent_a_name=client_agent_a_info["NAME"]
@@ -55,21 +56,14 @@ def connect_mcperfs():
     client_measure_name=client_measure_info["NAME"]
     client_measure_IP=client_measure_info["EXTERNAL-IP"]
 
-    # Connecting to client A
-    #client_a.load_system_host_keys()
-    client_a.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
-    client_a.connect(client_agent_a_IP, 22, username="ubuntu") # no passwd needed
+    client_a.set_missing_host_key_policy(paramiko.AutoAddPolicy()) 
+    client_a.connect(client_agent_a_IP, 22, username="ubuntu")
 
-    # Connecting to client B
-    #client_b.load_system_host_keys()
-    client_b.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
-    client_b.connect(client_agent_b_IP, 22, username="ubuntu") # no passwd needed
+    client_b.set_missing_host_key_policy(paramiko.AutoAddPolicy()) 
+    client_b.connect(client_agent_b_IP, 22, username="ubuntu")
 
-
-    # Connecting to client measure
-    #client_measure.load_system_host_keys()
-    client_measure.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # no known_hosts error
-    client_measure.connect(client_measure_IP, 22, username="ubuntu") # no passwd needed
+    client_measure.set_missing_host_key_policy(paramiko.AutoAddPolicy()) 
+    client_measure.connect(client_measure_IP, 22, username="ubuntu")
 
 
 def spin_up_cluster(args, create_cluster=True, setup_mcperf=True):
@@ -84,7 +78,7 @@ def spin_up_cluster(args, create_cluster=True, setup_mcperf=True):
             print(">> Cluster already exists")
         else:
             subprocess.run(
-                ["kops", "create", "-f", f"{args.cca_directory}/part{args.task}.yaml"],
+                ["kops", "create", "-f", args.userYaml],
                 check=True,
             )
 
@@ -111,15 +105,12 @@ def spin_up_cluster(args, create_cluster=True, setup_mcperf=True):
 
         (stdin, stdout, stderr) = client_a.exec_command(client_command)
         stderr = stdout.read()
-        print('Setup log for client A: ', client_command, stderr)
 
         (stdin, stdout, stderr) = client_b.exec_command(client_command)
         stderr = stdout.read()
-        print('Setup log for client B: ', client_command, stderr)
 
         (stdin, stdout, stderr) = client_measure.exec_command(client_command)
         stderr = stdout.read()
-        print('Setup log for client measure: ', client_command, stderr)
 
 
     #print(">> Labeling parsec server node")
@@ -277,21 +268,15 @@ def start_mcperf(memcached_ip):
 
     (stdin, stdout, stderr) = client_a.exec_command("./mcperf -T 2 -A")
     cmd_output = stdout.read()
-    #print('client A begins mcperf: ', client_command, cmd_output)
 
     (stdin, stdout, stderr) = client_b.exec_command("./mcperf -T 4 -A")
     cmd_output = stdout.read()
-    #print('client B begins mcperf: ', client_command, cmd_output)  
 
     client_measure_command = f"./mcperf -s {memcached_ip} --loadonly /n"
     +  f"./mcperf -s {memcached_ip} -a {client_agent_a_IP} -a {client_agent_b_IP} "
     +   "--noload -T 6 -C 4 -D 4 -Q 1000 -c 4 -t 10 --scan 30000:30500:5"
 
     (stdin, stdout, stderr) = client_measure.exec_command(client_measure_command)
-    #cmd_output = stdout.read()
-    #print('client measure begins mcperf: ', client_measure_command, cmd_output) 
-
-    # return client measure stdout for later logging to file
     return stdout
 
 
@@ -320,11 +305,14 @@ def run_part_3(args):
             current_cursor[run_id] = 0
         run_cursor[node_id] = current_cursor
 
-    N_JOBS = 8
+    N_BATCH_JOBS = 7
     dispatched_jobs = []
 
-    while num_jobs_done != N_JOBS:
+    while num_jobs_done != N_BATCH_JOBS:
+        print(f">> {num_jobs_done} / {N_BATCH_JOBS} jobs done")
+        print()
         for node_id, node_schedule in enumerate(schedule):
+            running_jobs = []
             for run_id, run in enumerate(node_schedule['runs']):
 
                 idx = run_cursor[node_id][run_id]
@@ -345,9 +333,9 @@ def run_part_3(args):
 
                         if job == 'some-memcached' and not memcached_running:
                             memcached_running = True
-                            # retrieving IP for memcached and starting mcperfs
                             stdout_mcperf = start_mcperf(info["IP"])
                             time.sleep(3)
+                        running_jobs.append(job)
                         continue
 
                     is_complete = (
@@ -355,7 +343,7 @@ def run_part_3(args):
                     ) 
 
                     if is_complete:
-                        print(f">> Job {job} on node {node_id} succeeded")
+                        print(f">> Completed job {job} on node {node_id}")
                         run_cursor[node_id][run_id] = idx + 1
                         job = run[idx]
 
@@ -368,8 +356,8 @@ def run_part_3(args):
 
                 elif ((not memcached_running and  job == 'some-memcached' ) or memcached_running) and job not in dispatched_jobs:
                     print(f">> Starting job {job} on node {node_id}")
-                    print(f">> kubectl create -f {args.cca_directory}/{schedule_dir}/{job}.yaml")
-                    subprocess.run(['kubectl', 'create', '-f', f'{args.cca_directory}/{schedule_dir}/{job}.yaml'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    job_file = f"{schedule_dir}/{job}.yaml"
+                    subprocess.run(['kubectl', 'create', '-f', job_file], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     dispatched_jobs.append(job)
                 else:
                     print(f">> Job {job} is not alive (yet)")
@@ -379,9 +367,11 @@ def run_part_3(args):
                     #     # retrieving IP for memcached and starting mcperfs
                     #     info = get_pod_info(job)
                     #     stdout_mcperf = start_mcperf(info["IP"])
-
+            print(f">> Node {node_id}: {running_jobs}")
         # TODO: introduce some delay?
     
+    print(">> All batch jobs completed")
+
     if stdout_mcperf is None:
         # raise error
         print("No stdout for mcperf present")
@@ -511,8 +501,6 @@ def create_csv_file(args):
             f.write(header)
 
 def create_part3_yaml(args):
-    import fileinput
-
     if os.path.exists(args.userYaml):
         return
 
@@ -520,10 +508,6 @@ def create_part3_yaml(args):
         '<user>': args.user,
     }
 
-    # Define the variable to replace '<user>'
-    replacement_variable = 'John Doe'
-
-    # Copy and rewrite the file
     with fileinput.FileInput(args.sourceYaml) as file, open(args.userYaml, 'w') as output_file:
         for line in file:
             for placeholder, substitution in REPLACE_MAP.items():
@@ -614,7 +598,7 @@ if __name__ == "__main__":
         "-s",
         "--schedule",
         type=str,
-        choices=["scheduleA", "scheduleB"],
+        choices=["scheduleA", "scheduleB", "scheduleC", "scheduleD"],
         help="Schedule to run",
         default="scheduleA",
     )

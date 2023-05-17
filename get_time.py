@@ -63,3 +63,5 @@ def get_time(filepath):
     return  pd.DataFrame({'name': names,
                             "start": [t - ref_time for t in start_times],
                             "end": [t - ref_time for t in completion_time]  })
+if __name__ == '__main__':
+    get_time(sys.argv[1])
