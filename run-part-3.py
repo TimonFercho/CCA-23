@@ -216,7 +216,7 @@ def log_job_time():
         ["kubectl", "get", "pods", "-o", "json", ">", "results.json"]
     )
 
-    get_time.get_time()
+    get_time.get_time("results.json")
     
 
 

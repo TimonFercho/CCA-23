@@ -3,10 +3,10 @@ import sys
 from datetime import datetime
 
 
-def get_time():
+def get_time(filepath):
 
     time_format = '%Y-%m-%dT%H:%M:%SZ'
-    file = open(sys.argv[1], 'r')
+    file = open(filepath, 'r')
     json_file = json.load(file)
 
     start_times = []
