@@ -7,6 +7,7 @@ from datetime import datetime
 import json
 import get_time
 import paramiko
+import time
 
 ALL_BENCHMARKS = [
     "blackscholes",
@@ -17,6 +18,7 @@ ALL_BENCHMARKS = [
     "radix",
     "vips",
 ]
+
 
 client_a = paramiko.SSHClient()
 client_b = paramiko.SSHClient()
@@ -290,6 +292,8 @@ def run_part_3(args):
 
     stdout_mcperf = None
 
+    memcached_running = False
+
     json_file_path = f"{schedule_dir}/{args.schedule}.json"
 
     with open(json_file_path, "r") as j:
@@ -298,7 +302,7 @@ def run_part_3(args):
     num_jobs_done = 0
 
     # instead of popping from job lists, we update an external cursor 
-    # to avoid cahnging structures while iterating through them
+    # to avoid changing structures while iterating through them
     run_cursor = {}
     for node_id, node_schedule in enumerate(schedule):
         current_cursor = {}
@@ -328,6 +332,12 @@ def run_part_3(args):
                     ) 
                     if is_running:
                         print(f">> Job {job} on node {node_id} is running")
+
+                        if job == 'some-memcached' and not memcached_running:
+                            memcached_running = True
+                            # retrieving IP for memcached and starting mcperfs
+                            stdout_mcperf = start_mcperf(info["IP"])
+                            time.sleep(3)
                         continue
 
                     is_complete = (
@@ -346,7 +356,7 @@ def run_part_3(args):
                         num_jobs_done += 1
                         print(f">> Job {job_name} failed")
 
-                elif job not in dispatched_jobs:
+                elif ((not memcached_running and  job == 'some-memcached' ) or memcached_running) and job not in dispatched_jobs:
                     print(f">> Starting job {job} on node {node_id}")
                     print(f">> kubectl create -f {args.cca_directory}/{schedule_dir}/{job}.yaml")
                     subprocess.run(['kubectl', 'create', '-f', f'{args.cca_directory}/{schedule_dir}/{job}.yaml'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
