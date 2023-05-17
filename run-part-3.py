@@ -609,9 +609,9 @@ if __name__ == "__main__":
         sys.exit(1)
     if args.task == "3":
         create_part3_yaml(args)
-        # spin_up_cluster(args)
-        # run_part_3(args)
-        # tear_down_cluster(args)
+        spin_up_cluster(args)
+        run_part_3(args)
+        tear_down_cluster(args)
         delete_part3_yaml(args)
     else:
         raise ValueError(f"Unknown task {args.task}")
