@@ -26,10 +26,6 @@ client_a = paramiko.SSHClient()
 client_b = paramiko.SSHClient()
 client_measure = paramiko.SSHClient()
 
-#client_a = client_b = client_measure = None
-client_agent_a_info = client_agent_b_info = client_measure_info = {}
-
-
 client_command = "sudo sh -c 'echo deb-src http://europe-west3.gce.archive.ubuntu.com/ubuntu/ bionic main restricted >> /etc/apt/sources.list' "
 client_command += "sudo apt-get update \n" 
 client_command += "sudo apt-get install libevent-dev libzmq3-dev git make g++ --yes \n"
@@ -39,11 +35,10 @@ client_command += "cd memcache-perf-dynamic \n"
 client_command += "make"
 
 
-
 def connect_mcperfs():
 
     print(">> Setting up SSH connection to compile mcperf")
-
+    
     client_agent_a_info= get_node_info("client-agent-a")
     client_agent_a_name=client_agent_a_info["NAME"]
     client_agent_a_IP=client_agent_a_info["EXTERNAL-IP"]
@@ -66,9 +61,8 @@ def connect_mcperfs():
     client_measure.connect(client_measure_IP, 22, username="ubuntu")
 
 
-def spin_up_cluster(args, create_cluster=True, setup_mcperf=True):
-
-    if create_cluster:
+def spin_up_cluster(args):
+    if args.deploy_cluster:
         print(f">> Setting up part {args.task}")
         os.environ["KOPS_STATE_STORE"] =  f"gs://{args.project}-{args.user}"
         os.environ["PROJECT"] = args.project
@@ -94,40 +88,15 @@ def spin_up_cluster(args, create_cluster=True, setup_mcperf=True):
             subprocess.run(["kops", "validate", "cluster", "--wait", "10m"], check=True)
             print(">> Cluster deployed successfully")
 
-    # Setup for mcperf clients
-
-    #TODO: validate the correctess of this approach 
-    # - what will the username be? can we test whether this works without running everything?
-
     connect_mcperfs()
 
-    if setup_mcperf:
-
-        (stdin, stdout, stderr) = client_a.exec_command(client_command)
-        stderr = stdout.read()
-
-        (stdin, stdout, stderr) = client_b.exec_command(client_command)
-        stderr = stdout.read()
-
-        (stdin, stdout, stderr) = client_measure.exec_command(client_command)
-        stderr = stdout.read()
-
-
-    #print(">> Labeling parsec server node")
-    #parsec_node_name = get_node_info("parsec-server")["NAME"]
-    #subprocess.run(
-    #    ["kubectl", "label", "nodes", parsec_node_name, "cca-project-nodetype=parsec"],
-    #    check=True,
-    #    stdout=subprocess.PIPE,
-    #    stderr=subprocess.PIPE,
-    #)
-    #parsec_node = get_node_info("parsec-server")
-    #parsec_node_labels = get_node_info("parsec-server")["LABELS"]
-    #if not "cca-project-nodetype=parsec" in parsec_node_labels:
-    #    print(">> Failed to add label")
-    #    return
-
-
+    if args.compile_mcperf:
+        print(">> Compiling mcperf")
+        client_a.exec_command(client_command)
+        client_b.exec_command(client_command)
+        client_measure.exec_command(client_command)
+    else:
+        print(">> Skipping mcperf compilation")
 
     print(f">> Finished setting up part {args.task}")
 
@@ -204,24 +173,22 @@ def run_benchmark_with_threads(args, benchmark_short, n_threads):
     )
 
 
-def log_job_time(schedule):
- 
+def log_job_time(schedule_dir):
+    results_file = f"{schedule_dir}/results.json"
+    parsec_times_file = f"{schedule_dir}/parsec_times.csv"
+
     subprocess.run(
-        ["kubectl", "get", "pods", "-o", "json", ">", "results.json"]
+        ["kubectl", "get", "pods", "-o", "json", ">", results_file],
     )
 
-    parsec_df = get_time.get_time("results.json")
+    parsec_df = get_time.get_time(results_file)
 
     for node_id, node_schedule in enumerate(schedule):
             for run_id, run in enumerate(node_schedule['runs']):
                 for job in run:
                     parsec_df.loc[job]['machine'] = node_schedule['node']
 
-    parsec_df.to_csv('parsec_times.csv')
-
-
-    
-
+    parsec_df.to_csv(parsec_times_file)
 
 
 def create_modified_config_file(args, benchmark, n_threads):
@@ -254,29 +221,39 @@ def tear_down_cluster(args):
     )
     print(">> Cluster deleted successfully")
 
-
+def execute_ssh_command(client, command):
+    _, stdout, stderr = client.exec_command(command)
+    print(f">> Executed command: {command}")
+    exit_status = stdout.channel.recv_exit_status()
+    if exit_status != 0:
+        print(f"!! Command execution failed with exit code: {exit_status}")
+        error = stderr.read().decode("utf-8")
+        print(error)
+    return stdout
 
 def start_mcperf(memcached_ip):
+    client_agent_a_info = get_node_info("client-agent-a")
     client_agent_a_name=client_agent_a_info["NAME"]
     client_agent_a_IP=client_agent_a_info["INTERNAL-IP"]
 
+    client_agent_b_info = get_node_info("client-agent-b")
     client_agent_b_name=client_agent_b_info["NAME"]
     client_agent_b_IP=client_agent_b_info["INTERNAL-IP"]
 
+    client_measure_info = get_node_info("client-measure")
     client_measure_name=client_measure_info["NAME"]
     client_measure_IP=client_measure_info["INTERNAL-IP"]
 
-    (stdin, stdout, stderr) = client_a.exec_command("./mcperf -T 2 -A")
-    cmd_output = stdout.read()
+    print(">> Starting mcperf on client-agent-a")
+    execute_ssh_command(client_a, "cd memcache-perf-dynamic; ./mcperf -T 2 -A")
 
-    (stdin, stdout, stderr) = client_b.exec_command("./mcperf -T 4 -A")
-    cmd_output = stdout.read()
+    print(">> Starting mcperf on client-agent-b")
+    execute_ssh_command(client_b, "cd memcache-perf-dynamic; ./mcperf -T 4 -A")
 
-    client_measure_command = f"./mcperf -s {memcached_ip} --loadonly /n"
-    +  f"./mcperf -s {memcached_ip} -a {client_agent_a_IP} -a {client_agent_b_IP} "
-    +   "--noload -T 6 -C 4 -D 4 -Q 1000 -c 4 -t 10 --scan 30000:30500:5"
+    print(">> Starting mcperf on client-measure")
+    client_measure_command = f"cd memcache-perf-dynamic; ./mcperf -s {memcached_ip} --loadonly; ./mcperf -s {memcached_ip} -a {client_agent_a_IP} -a {client_agent_b_IP} --noload -T 6 -C 4 -D 4 -Q 1000 -c 4 -t 10 --scan 30000:30500:5"
+    stdout = execute_ssh_command(client_a, client_measure_command)
 
-    (stdin, stdout, stderr) = client_measure.exec_command(client_measure_command)
     return stdout
 
 
@@ -285,8 +262,17 @@ def run_part_3(args):
     print(">> Running part 3")
     schedule_dir = f"{args.cca_directory}/schedules/{args.schedule}"
 
-    stdout_mcperf = None
+    print(">> Deleting all jobs")
+    subprocess.run(
+        ["kubectl", "delete", "jobs", "--all"], check=True, stdout=subprocess.PIPE
+    )
 
+    print(">> Deleting all pods")
+    subprocess.run(
+        ["kubectl", "delete", "pods", "--all"], check=True, stdout=subprocess.PIPE
+    )
+
+    stdout_mcperf = None
     memcached_running = False
 
     json_file_path = f"{schedule_dir}/{args.schedule}.json"
@@ -296,8 +282,6 @@ def run_part_3(args):
 
     num_jobs_done = 0
 
-    # instead of popping from job lists, we update an external cursor 
-    # to avoid changing structures while iterating through them
     run_cursor = {}
     for node_id, node_schedule in enumerate(schedule):
         current_cursor = {}
@@ -329,11 +313,11 @@ def run_part_3(args):
                         info["STATUS"] == "Running"
                     ) 
                     if is_running:
-                        print(f">> Job {job} on node {node_id} is running")
-
                         if job == 'some-memcached' and not memcached_running:
+                            print(f">> Starting memcached on node {node_id}")
                             memcached_running = True
                             stdout_mcperf = start_mcperf(info["IP"])
+                            mcperf_stdout = start_mcperf(info["IP"])
                             time.sleep(3)
                         running_jobs.append(job)
                         continue
@@ -346,7 +330,6 @@ def run_part_3(args):
                         print(f">> Completed job {job} on node {node_id}")
                         run_cursor[node_id][run_id] = idx + 1
                         job = run[idx]
-
                         num_jobs_done += 1
 
                     job_name = info["NAME"]
@@ -362,42 +345,28 @@ def run_part_3(args):
                 else:
                     print(f">> Job {job} is not alive (yet)")
 
-                    # TODO: handle this somewhere else when we know memcached is running
-                    # if job == "memcache-t1-cpuset":
-                    #     # retrieving IP for memcached and starting mcperfs
-                    #     info = get_pod_info(job)
-                    #     stdout_mcperf = start_mcperf(info["IP"])
             print(f">> Node {node_id}: {running_jobs}")
-        # TODO: introduce some delay?
     
     print(">> All batch jobs completed")
 
-    if stdout_mcperf is None:
-        # raise error
-        print("No stdout for mcperf present")
+    if mcperf_stdout is None:
+        print(">> No stdout for mcperf present")
     else:
         print(">> Collecting mcperf results")
-        save_mcperf_logs(stdout_mcperf)
+        save_mcperf_logs(stdout, schedule_dir)
 
-    log_job_time(schedule)
-    print(">> Parsec job logs Saved")
+    print(">> Collecting parsec job logs")
+    log_job_time(schedule_dir)
 
-    #print(">> Collecting mcperf results")
-    #get_mcperf_logs(args)
+    print(">> Finished part 3")
 
+def save_mcperf_logs(mcperf_stdout, schedule_dir):
+    output = mcperf_stdout.read().decode("utf-8")
 
-# writing full mcperf log output
-def save_mcperf_logs(stdout_mcperf):
-
-    output = stdout_mcperf.decode("utf-8") 
-    print(output)
-    print(">> Saving to txt file")
-
-    txt_filename = f"mcperf-part{args.task}.txt"
+    txt_filename = f"{schedule_dir}/mcperf-output.txt"
 
     with open(txt_filename, 'w') as f:
         f.write(output)
-
 
 
 def does_cluster_exist(cluster_name):
@@ -601,6 +570,18 @@ if __name__ == "__main__":
         choices=["scheduleA", "scheduleB", "scheduleC", "scheduleD"],
         help="Schedule to run",
         default="scheduleA",
+    )
+    parser.add_argument(
+        "--deploy-cluster",
+        action="store_true",
+        help="Deploy the cluster",
+        default=True
+    )
+    parser.add_argument(
+        "--compile-mcperf",
+        action="store_true",
+        help="Compile mcperf on the client and measure nodes",
+        default=True
     )
 
     args = parser.parse_args()

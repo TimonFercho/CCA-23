@@ -19,9 +19,6 @@ parsec_df = pd.DataFrame({'name': ALL_BENCHMARKS,
 
 
 def get_time(filepath):
-
-
-
     time_format = '%Y-%m-%dT%H:%M:%SZ'
     file = open(filepath, 'r')
     json_file = json.load(file)
