@@ -14,8 +14,8 @@ ALL_BENCHMARKS = [
 ]
 
 parsec_df = pd.DataFrame({'name': ALL_BENCHMARKS,
-                            "start_time": [0]*len(ALL_BENCHMARKS),
-                            "end_time": [0]*len(ALL_BENCHMARKS)})
+                          "start_time": [0]*len(ALL_BENCHMARKS),
+                          "end_time": [0]*len(ALL_BENCHMARKS)})
 
 
 def get_time(filepath):
@@ -32,33 +32,27 @@ def get_time(filepath):
         if str(name) != "memcached":
             try:
                 start_time = datetime.strptime(
-                        item['status']['containerStatuses'][0]['state']['terminated']['startedAt'],
-                        time_format)
+                    item['status']['containerStatuses'][0]['state']['terminated']['startedAt'],
+                    time_format)
                 completion_time = datetime.strptime(
-                        item['status']['containerStatuses'][0]['state']['terminated']['finishedAt'],
-                        time_format)
+                    item['status']['containerStatuses'][0]['state']['terminated']['finishedAt'],
+                    time_format)
                 print("Job time: ", completion_time - start_time)
                 start_times.append(start_time)
                 completion_times.append(completion_time)
                 names.append(name)
             except KeyError:
-                print("Job {0} has not completed....".format(name))
-                sys.exit(0)
+                print("!! Job {0} has not completed....".format(name))
 
     if len(start_times) != 7 and len(completion_times) != 7:
-        print("You haven't run all the PARSEC jobs. Exiting...")
-        sys.exit(0)
-
+        print("!! You haven't run all the PARSEC jobs")
 
     ref_time = min(start_times)
 
-    #parsec_df.to_csv('parsec_times.csv')
-
-    print("Total time: {0}".format(max(completion_times) - min(start_times)))
+    print(">> Total time: {0}".format(
+        max(completion_times) - min(start_times)))
     file.close()
 
-    return  pd.DataFrame({'name': names,
-                            "start": [t - ref_time for t in start_times],
-                            "end": [t - ref_time for t in completion_time]  })
-if __name__ == '__main__':
-    get_time(sys.argv[1])
+    return pd.DataFrame({'name': names,
+                         "start": [(t - ref_time).total_seconds() for t in start_times],
+                         "end": [(t - ref_time).total_seconds() for t in completion_times]})
