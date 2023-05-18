@@ -1,16 +1,16 @@
 [
   {
     "node": "node-a-2core",
-    "runs": [["memcached"]]
+    "runs": [["memcached"], ["parsec-radix"]]
   },
   {
     "node": "node-b-4core",
     "runs": [
-      ["parsec-dedup"]
+      ["parsec-blackscholes", "parsec-dedup", "parsec-ferret", "parsec-vips"]
     ]
   },
   {
     "node": "node-c-8core",
-    "runs": []
+    "runs": [["parsec-canneal"], ["parsec-freqmine"]]
   }
 ]
