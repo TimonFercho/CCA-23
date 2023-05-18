@@ -109,7 +109,7 @@ def spin_up_cluster(args):
         stderr_measure.read()
 
     else:
-        print(">> Skipping mcperf compilation")
+        print("!! Skipping mcperf compilation")
 
     print(f">> Finished setting up part {args.task}")
 
@@ -156,7 +156,7 @@ def tear_down_cluster(args):
         return
 
     if args.keep_alive:
-        print("!! Cluster will be kept alive")
+        print("!! Skipped deleting cluster")
         return
 
     print(">> Deleting cluster")
@@ -193,7 +193,7 @@ def terminate_mcperf():
     client_a.exec_command("pkill -TERM mcperf")
 
     print(">> Terminating mcperf on client-agent-b")
-    client_measure.exec_command("pkill -TERM mcperf")
+    client_b.exec_command("pkill -TERM mcperf")
 
 
 def create_memcached_service():
@@ -237,7 +237,7 @@ def run_part_3(args):
             ["kubectl", "delete", "pods", "--all"], check=True, stdout=subprocess.PIPE
         )
     else:
-        print(">> Skipping pod deletion")
+        print("!! Skipping pod deletion")
 
     memcached_running = False
 
@@ -268,7 +268,6 @@ def run_part_3(args):
         for node_id, node_schedule in enumerate(schedule):
             running_jobs = []
             for run_id, run in enumerate(node_schedule['runs']):
-
                 idx = run_cursor[node_id][run_id]
                 finished_run = idx >= len(run)
                 if finished_run:
