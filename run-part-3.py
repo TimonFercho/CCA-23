@@ -263,7 +263,7 @@ def run_part_3(args):
     mcperf_stdout = None
 
     while num_jobs_done != n_batch_jobs:
-        print(f">> {num_jobs_done} / {n_batch_jobs} jobs done")
+        print(f"   {num_jobs_done} / {n_batch_jobs} jobs done")
         print()
         for node_id, node_schedule in enumerate(schedule):
             running_jobs = []
@@ -301,7 +301,7 @@ def run_part_3(args):
                                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     dispatched_jobs.append(job)
 
-            print(f">> Node {node_id}: {running_jobs}")
+            print(f"   Node {node_id}: {running_jobs}")
 
     print(">> All batch jobs completed")
 
