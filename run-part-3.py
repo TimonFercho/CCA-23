@@ -417,23 +417,26 @@ def get_node_info(node_name_beginning):
         stdout=subprocess.PIPE,
     )
     data = parse_result_output(result)
-    node_info = [node for node in data if node["NAME"].startswith(node_name_beginning)][
-        0
-    ]
-    return node_info
+    node_infos = (node for node in data if node["NAME"].startswith(node_name_beginning))
+    first_matching_node = next(node_infos, None)
+    return first_matching_node
 
+def does_service_exist(service_name_beginning):
+    return get_services_info(service_name_beginning) is not None
+
+def get_services_info(service_name_beginning):
+    result = subprocess.run(["kubectl", "get", "services", "-o", "wide", "--show-labels"], check=True, stdout=subprocess.PIPE)
+    data = parse_result_output(result)
+    matching_services = (service for service in data if service["NAME"].startswith(service_name_beginning))
+    first_matching_service = next(matching_services, None)
+    return first_matching_service
 
 def get_pod_info(pod_name_beginning):
-    result = subprocess.run(
-        ["kubectl", "get", "pods", "-o", "wide", "--show-labels"],
-        check=True,
-        stdout=subprocess.PIPE,
-    )
+    result = subprocess.run(["kubectl", "get", "pods", "-o", "wide", "--show-labels"], check=True, stdout=subprocess.PIPE)
     data = parse_result_output(result)
-    pod_info = [pod for pod in data if pod["NAME"].startswith(pod_name_beginning)]
-    if len(pod_info) == 0:
-        return None
-    return pod_info[0]
+    pod_infos = (pod for pod in data if pod["NAME"].startswith(pod_name_beginning))
+    first_matching_pod = next(pod_infos, None)
+    return first_matching_pod
 
 
 def parse_execution_times(result):
