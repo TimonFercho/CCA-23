@@ -36,21 +36,26 @@ client_command += "cd memcache-perf-dynamic \n"
 client_command += "make"
 
 
+def get_client_ips():
+    client_agent_a_info = get_node_info("client-agent-a")
+    client_agent_b_info = get_node_info("client-agent-b")
+    client_measure_info = get_node_info("client-measure")
+
+    if not(all([client_agent_a_info, client_agent_b_info, client_measure_info])):
+        raise RuntimeError("Could not get node info for mcperf compilation")
+
+    client_agent_a_IP = client_agent_a_info["EXTERNAL-IP"]
+    client_agent_b_IP = client_agent_b_info["EXTERNAL-IP"]
+    client_measure_IP = client_measure_info["EXTERNAL-IP"]
+
+    return client_agent_a_IP, client_agent_b_IP, client_measure_IP
+
+
 def connect_mcperfs():
 
     print(">> Setting up SSH connection to compile mcperf")
 
-    client_agent_a_info = get_node_info("client-agent-a")
-    client_agent_a_name = client_agent_a_info["NAME"]
-    client_agent_a_IP = client_agent_a_info["EXTERNAL-IP"]
-
-    client_agent_b_info = get_node_info("client-agent-b")
-    client_agent_b_name = client_agent_b_info["NAME"]
-    client_agent_b_IP = client_agent_b_info["EXTERNAL-IP"]
-
-    client_measure_info = get_node_info("client-measure")
-    client_measure_name = client_measure_info["NAME"]
-    client_measure_IP = client_measure_info["EXTERNAL-IP"]
+    client_agent_a_IP, client_agent_b_IP, client_measure_IP = get_client_ips()
 
     client_a.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     client_a.connect(client_agent_a_IP, 22, username="ubuntu")
@@ -102,80 +107,7 @@ def spin_up_cluster(args):
 
     print(f">> Finished setting up part {args.task}")
 
-
-def run_benchmark_with_threads(args, benchmark_short, n_threads):
-    benchmark = f"parsec-{benchmark_short}"
-    print(f">> Running benchmark {benchmark} with {n_threads} threads")
-
-    print(">> Creating csv file for results")
-    create_csv_file(args)
-
-    print(">> Creating modified config file")
-    create_modified_config_file(args, benchmark, n_threads)
-
-    print(">> Creating benchmark")
-    subprocess.run(
-        [
-            "kubectl",
-            "create",
-            "-f",
-            f"{args.cca_directory}/parsec-benchmarks/part2b/{benchmark}_{n_threads}.yaml",
-        ],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if not does_pod_exist(benchmark):
-        print("!! Benchmark creation failed")
-        return
-
-    print(">> Waiting for benchmark job to complete")
-    subprocess.run(
-        [
-            "kubectl",
-            "wait",
-            "--for=condition=complete",
-            "job",
-            benchmark,
-            f"--timeout={args.wait_timeout}s",
-        ],
-        check=True,
-        stdout=subprocess.PIPE,
-    )
-    print(">> Benchmark completed")
-
-    print(">> Collecting benchmark results")
-    benchmark_pod = get_pod_info(benchmark)
-    pod_name = benchmark_pod["NAME"]
-    result = subprocess.run(
-        ["kubectl", "logs", pod_name], check=True, stdout=subprocess.PIPE
-    )
-    real_ms, user_ms, sys_ms = parse_execution_times(result)
-
-    print(f">> Real: {real_ms} ms, User: {user_ms} ms, Sys: {sys_ms} ms")
-
-    print(">> Appending benchmark results to csv file")
-    append_result_to_csv(
-        args, benchmark_short, real_ms, user_ms, sys_ms, n_threads=n_threads
-    )
-
-    print(">> Deleting all benchmarking jobs")
-    subprocess.run(
-        ["kubectl", "delete", "jobs", "--all"], check=True, stdout=subprocess.PIPE
-    )
-
-    print(">> Deleting modified config file")
-    subprocess.run(
-        [
-            "rm",
-            f"{args.cca_directory}/parsec-benchmarks/part2b/{benchmark}_{n_threads}.yaml",
-        ],
-        check=True,
-        stdout=subprocess.PIPE,
-    )
-
-
-def log_job_time(schedule_dir):
+def log_job_time(schedule, schedule_dir):
     results_file = f"{schedule_dir}/results.json"
     parsec_times_file = f"{schedule_dir}/parsec_times.csv"
 
@@ -185,8 +117,8 @@ def log_job_time(schedule_dir):
 
     parsec_df = get_time.get_time(results_file)
 
-    for node_id, node_schedule in enumerate(schedule):
-        for run_id, run in enumerate(node_schedule['runs']):
+    for _, node_schedule in enumerate(schedule):
+        for _, run in enumerate(node_schedule['runs']):
             for job in run:
                 parsec_df.loc[job]['machine'] = node_schedule['node']
 
@@ -238,12 +170,15 @@ def execute_ssh_command(client, command):
 
 def start_mcperf(memcached_ip):
     client_agent_a_info = get_node_info("client-agent-a")
-    client_agent_a_IP = client_agent_a_info["INTERNAL-IP"]
-
     client_agent_b_info = get_node_info("client-agent-b")
-    client_agent_b_IP = client_agent_b_info["INTERNAL-IP"]
-
     client_measure_info = get_node_info("client-measure")
+
+    if not all([client_agent_a_info, client_agent_b_info, client_measure_info]):
+        print("!! Could not get all info objects")
+        return
+
+    client_agent_a_IP = client_agent_a_info["INTERNAL-IP"]
+    client_agent_b_IP = client_agent_b_info["INTERNAL-IP"]
     client_measure_IP = client_measure_info["INTERNAL-IP"]
 
     print(">> Starting mcperf on client-agent-a")
@@ -254,7 +189,7 @@ def start_mcperf(memcached_ip):
 
     print(">> Starting mcperf on client-measure")
     client_measure_command = f"cd memcache-perf-dynamic; ./mcperf -s {memcached_ip} --loadonly; ./mcperf -s {memcached_ip} -a {client_agent_a_IP} -a {client_agent_b_IP} --noload -T 6 -C 4 -D 4 -Q 1000 -c 4 -t 10 --scan 30000:30500:5"
-    stdout = execute_ssh_command(client_a, client_measure_command)
+    stdout = execute_ssh_command(client_measure, client_measure_command)
 
     return stdout
 
@@ -292,6 +227,7 @@ def run_part_3(args):
 
     N_BATCH_JOBS = 7
     dispatched_jobs = []
+    mcperf_stdout = None
 
     while num_jobs_done != N_BATCH_JOBS:
         print(f">> {num_jobs_done} / {N_BATCH_JOBS} jobs done")
@@ -355,10 +291,10 @@ def run_part_3(args):
         print(">> No stdout for mcperf present")
     else:
         print(">> Collecting mcperf results")
-        save_mcperf_logs(stdout, schedule_dir)
+        save_mcperf_logs(mcperf_stdout, schedule_dir)
 
     print(">> Collecting parsec job logs")
-    log_job_time(schedule_dir)
+    log_job_time(schedule, schedule_dir)
 
     print(">> Finished part 3")
 
@@ -410,20 +346,28 @@ def parse_result_output(result):
 
 
 def does_pod_exist(pod_name_beginning):
-    return get_pod_info(pod_name_beginning) is not None
+    try:
+        return get_pod_info(pod_name_beginning) is not None
+    except ValueError:
+        return False
 
 
-def get_node_info(node_name_beginning):
+def get_ressource_info(ressource_type, ressource_name_beginning):
     result = subprocess.run(
-        ["kubectl", "get", "nodes", "-o", "wide", "--show-labels"],
+        ["kubectl", "get", ressource_type, "-o", "wide", "--show-labels"],
         check=True,
         stdout=subprocess.PIPE,
     )
     data = parse_result_output(result)
-    node_infos = (node for node in data if node["NAME"].startswith(
-        node_name_beginning))
-    first_matching_node = next(node_infos, None)
-    return first_matching_node
+    ressource_infos = (ressource for ressource in data if ressource["NAME"].startswith(
+        ressource_name_beginning))
+    first_matching_ressource = next(ressource_infos, None)
+    if first_matching_ressource is None:
+        raise ValueError(f"No matching ressource found for name beginning with {ressource_name_beginning}")
+    return first_matching_ressource
+
+def get_node_info(node_name_beginning):
+    return get_ressource_info("nodes", node_name_beginning)
 
 
 def does_service_exist(service_name_beginning):
@@ -431,23 +375,11 @@ def does_service_exist(service_name_beginning):
 
 
 def get_services_info(service_name_beginning):
-    result = subprocess.run(["kubectl", "get", "services", "-o",
-                            "wide", "--show-labels"], check=True, stdout=subprocess.PIPE)
-    data = parse_result_output(result)
-    matching_services = (service for service in data if service["NAME"].startswith(
-        service_name_beginning))
-    first_matching_service = next(matching_services, None)
-    return first_matching_service
+    return get_ressource_info("services", service_name_beginning)
 
 
 def get_pod_info(pod_name_beginning):
-    result = subprocess.run(["kubectl", "get", "pods", "-o", "wide",
-                            "--show-labels"], check=True, stdout=subprocess.PIPE)
-    data = parse_result_output(result)
-    pod_infos = (pod for pod in data if pod["NAME"].startswith(
-        pod_name_beginning))
-    first_matching_pod = next(pod_infos, None)
-    return first_matching_pod
+    return get_ressource_info("pods", pod_name_beginning)
 
 
 def parse_execution_times(result):
