@@ -1,3 +1,4 @@
+from glob import glob
 import shutil
 import os
 import subprocess
@@ -100,9 +101,13 @@ def spin_up_cluster(args):
 
     if args.compile_mcperf:
         print(">> Compiling mcperf")
-        client_a.exec_command(client_command)
-        client_b.exec_command(client_command)
-        client_measure.exec_command(client_command)
+        _, _, stderr_a = client_a.exec_command(client_command)
+        _, _, stderr_b = client_b.exec_command(client_command)
+        _, _, stderr_measure = client_measure.exec_command(client_command)
+        stderr_a.read()
+        stderr_b.read()
+        stderr_measure.read()
+
     else:
         print(">> Skipping mcperf compilation")
 
@@ -151,7 +156,7 @@ def tear_down_cluster(args):
         return
 
     if args.keep_alive:
-        print(">> Cluster will be kept alive")
+        print("!! Cluster will be kept alive")
         return
 
     print(">> Deleting cluster")
@@ -159,11 +164,6 @@ def tear_down_cluster(args):
         ["kops", "delete", "cluster", args.cluster_name, "--yes"], check=True
     )
     print(">> Cluster deleted successfully")
-
-
-def execute_ssh_command(client, command):
-    _, stdout, _ = client.exec_command(command)
-    return stdout
 
 
 def start_mcperf():
@@ -174,29 +174,26 @@ def start_mcperf():
     terminate_mcperf()
 
     print(">> Starting mcperf on client-agent-a")
-    execute_ssh_command(
-        client_a, "cd memcache-perf-dynamic; ./mcperf -T 2 -A &")
+    client_a.exec_command("cd memcache-perf-dynamic; ./mcperf -T 2 -A &")
 
     print(">> Starting mcperf on client-agent-b")
-    execute_ssh_command(
-        client_b, "cd memcache-perf-dynamic; ./mcperf -T 4 -A &")
+    client_b.exec_command("cd memcache-perf-dynamic; ./mcperf -T 4 -A &")
 
     print(">> Starting mcperf on client-measure")
-    client_measure_command = f"cd memcache-perf-dynamic; ./mcperf -s {memcached_ip} --loadonly; ./mcperf -s {memcached_ip} -a {client_agent_a_IP} -a {client_agent_b_IP} --noload -T 6 -C 4 -D 4 -Q 1000 -c 4 -t 10 --scan 30000:30500:5"
-    stdout = execute_ssh_command(
-        client_measure, client_measure_command)
-    return stdout
+    CLIENT_MEASURE_COMMAND = f"cd memcache-perf-dynamic; ./mcperf -s {memcached_ip} --loadonly; ./mcperf -s {memcached_ip} -a {client_agent_a_IP} -a {client_agent_b_IP} --noload -T 6 -C 4 -D 4 -Q 1000 -c 4 -t 10 --scan 30000:30500:5"
+    _, mcperf_stdout, _ = client_measure.exec_command(CLIENT_MEASURE_COMMAND)
+    return mcperf_stdout
 
 
 def terminate_mcperf():
+    print(">> Terminating mcperf on client-measure")
+    client_measure.exec_command("pkill -TERM mcperf")
+
     print(">> Terminating mcperf on client-agent-a")
-    execute_ssh_command(client_a, "pkill mcperf")
+    client_a.exec_command("pkill -TERM mcperf")
 
     print(">> Terminating mcperf on client-agent-b")
-    execute_ssh_command(client_b, "pkill mcperf")
-
-    print(">> Terminating mcperf on client-measure")
-    execute_ssh_command(client_measure, "pkill mcperf")
+    client_measure.exec_command("pkill -TERM mcperf")
 
 
 def create_memcached_service():
@@ -226,7 +223,7 @@ def create_memcached_service():
 
 
 def run_part_3(args):
-    print(">> Running part 3")
+    print(f">> Running part 3 for schedule {args.schedule}")
     schedule_dir = f"{args.cca_directory}/schedules/{args.schedule}"
 
     print(">> Deleting all jobs")
@@ -259,7 +256,8 @@ def run_part_3(args):
         run_cursor[node_id] = current_cursor
 
     N_MEMCACHED_JOBS = 1
-    n_jobs = sum([len(node_schedule['runs']) for node_schedule in schedule])
+    n_jobs = sum([len(run)
+                 for node_schedule in schedule for run in node_schedule['runs']])
     n_batch_jobs = n_jobs - N_MEMCACHED_JOBS
     dispatched_jobs = []
     mcperf_stdout = None
@@ -308,7 +306,6 @@ def run_part_3(args):
 
     print(">> All batch jobs completed")
 
-    terminate_mcperf()
     save_mcperf_logs(mcperf_stdout, schedule_dir)
     log_job_time(schedule, schedule_dir)
 
@@ -318,6 +315,8 @@ def run_part_3(args):
 def save_mcperf_logs(mcperf_stdout, schedule_dir):
     if mcperf_stdout is None:
         raise RuntimeError("mcperf stdout is None")
+
+    terminate_mcperf()
 
     print(">> Reading mcperf logs")
     output = mcperf_stdout.read().decode("utf-8")
@@ -540,11 +539,16 @@ if __name__ == "__main__":
         help="Timeout for running benchmarks in seconds",
         default=600,
     )
+    schedules = [
+        os.path.basename(x)
+        for x in glob(os.path.join("schedules", "*"))
+        if os.path.isdir(x)
+    ]
     parser.add_argument(
         "-s",
         "--schedule",
         type=str,
-        choices=["scheduleA", "scheduleB", "scheduleC", "scheduleD"],
+        choices=schedules,
         help="Schedule to run",
         default="scheduleA",
     )
