@@ -10,6 +10,7 @@ import paramiko
 import time
 import pandas as pd
 import fileinput
+from time import sleep
 
 ALL_BENCHMARKS = [
     "blackscholes",
@@ -27,7 +28,7 @@ client_b = paramiko.SSHClient()
 client_measure = paramiko.SSHClient()
 
 client_command = "sudo sh -c 'echo deb-src http://europe-west3.gce.archive.ubuntu.com/ubuntu/ bionic main restricted >> /etc/apt/sources.list' "
-client_command += "sudo apt-get update \n" 
+client_command += "sudo apt-get update \n"
 client_command += "sudo apt-get install libevent-dev libzmq3-dev git make g++ --yes \n"
 client_command += "sudo apt-get build-dep memcached --yes \n"
 client_command += "git clone https://github.com/eth-easl/memcache-perf-dynamic.git \n"
@@ -38,33 +39,33 @@ client_command += "make"
 def connect_mcperfs():
 
     print(">> Setting up SSH connection to compile mcperf")
-    
-    client_agent_a_info= get_node_info("client-agent-a")
-    client_agent_a_name=client_agent_a_info["NAME"]
-    client_agent_a_IP=client_agent_a_info["EXTERNAL-IP"]
 
-    client_agent_b_info= get_node_info("client-agent-b")
-    client_agent_b_name=client_agent_b_info["NAME"]
-    client_agent_b_IP=client_agent_b_info["EXTERNAL-IP"]
-    
-    client_measure_info= get_node_info("client-measure")
-    client_measure_name=client_measure_info["NAME"]
-    client_measure_IP=client_measure_info["EXTERNAL-IP"]
+    client_agent_a_info = get_node_info("client-agent-a")
+    client_agent_a_name = client_agent_a_info["NAME"]
+    client_agent_a_IP = client_agent_a_info["EXTERNAL-IP"]
 
-    client_a.set_missing_host_key_policy(paramiko.AutoAddPolicy()) 
+    client_agent_b_info = get_node_info("client-agent-b")
+    client_agent_b_name = client_agent_b_info["NAME"]
+    client_agent_b_IP = client_agent_b_info["EXTERNAL-IP"]
+
+    client_measure_info = get_node_info("client-measure")
+    client_measure_name = client_measure_info["NAME"]
+    client_measure_IP = client_measure_info["EXTERNAL-IP"]
+
+    client_a.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     client_a.connect(client_agent_a_IP, 22, username="ubuntu")
 
-    client_b.set_missing_host_key_policy(paramiko.AutoAddPolicy()) 
+    client_b.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     client_b.connect(client_agent_b_IP, 22, username="ubuntu")
 
-    client_measure.set_missing_host_key_policy(paramiko.AutoAddPolicy()) 
+    client_measure.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     client_measure.connect(client_measure_IP, 22, username="ubuntu")
 
 
 def spin_up_cluster(args):
     if args.deploy_cluster:
         print(f">> Setting up part {args.task}")
-        os.environ["KOPS_STATE_STORE"] =  f"gs://{args.project}-{args.user}"
+        os.environ["KOPS_STATE_STORE"] = f"gs://{args.project}-{args.user}"
         os.environ["PROJECT"] = args.project
 
         print(">> Creating cluster")
@@ -85,7 +86,8 @@ def spin_up_cluster(args):
                 check=True,
             )
             print(">> Waiting for cluster to be ready")
-            subprocess.run(["kops", "validate", "cluster", "--wait", "10m"], check=True)
+            subprocess.run(["kops", "validate", "cluster",
+                           "--wait", "10m"], check=True)
             print(">> Cluster deployed successfully")
 
     connect_mcperfs()
@@ -184,9 +186,9 @@ def log_job_time(schedule_dir):
     parsec_df = get_time.get_time(results_file)
 
     for node_id, node_schedule in enumerate(schedule):
-            for run_id, run in enumerate(node_schedule['runs']):
-                for job in run:
-                    parsec_df.loc[job]['machine'] = node_schedule['node']
+        for run_id, run in enumerate(node_schedule['runs']):
+            for job in run:
+                parsec_df.loc[job]['machine'] = node_schedule['node']
 
     parsec_df.to_csv(parsec_times_file)
 
@@ -221,28 +223,28 @@ def tear_down_cluster(args):
     )
     print(">> Cluster deleted successfully")
 
+
 def execute_ssh_command(client, command):
     _, stdout, stderr = client.exec_command(command)
     print(f">> Executed command: {command}")
     exit_status = stdout.channel.recv_exit_status()
+    print(f">> Command exit status: {exit_status}")
     if exit_status != 0:
         print(f"!! Command execution failed with exit code: {exit_status}")
         error = stderr.read().decode("utf-8")
         print(error)
     return stdout
 
+
 def start_mcperf(memcached_ip):
     client_agent_a_info = get_node_info("client-agent-a")
-    client_agent_a_name=client_agent_a_info["NAME"]
-    client_agent_a_IP=client_agent_a_info["INTERNAL-IP"]
+    client_agent_a_IP = client_agent_a_info["INTERNAL-IP"]
 
     client_agent_b_info = get_node_info("client-agent-b")
-    client_agent_b_name=client_agent_b_info["NAME"]
-    client_agent_b_IP=client_agent_b_info["INTERNAL-IP"]
+    client_agent_b_IP = client_agent_b_info["INTERNAL-IP"]
 
     client_measure_info = get_node_info("client-measure")
-    client_measure_name=client_measure_info["NAME"]
-    client_measure_IP=client_measure_info["INTERNAL-IP"]
+    client_measure_IP = client_measure_info["INTERNAL-IP"]
 
     print(">> Starting mcperf on client-agent-a")
     execute_ssh_command(client_a, "cd memcache-perf-dynamic; ./mcperf -T 2 -A")
@@ -255,7 +257,6 @@ def start_mcperf(memcached_ip):
     stdout = execute_ssh_command(client_a, client_measure_command)
 
     return stdout
-
 
 
 def run_part_3(args):
@@ -311,7 +312,7 @@ def run_part_3(args):
                     info = get_pod_info(job)
                     is_running = (
                         info["STATUS"] == "Running"
-                    ) 
+                    )
                     if is_running:
                         if job == 'some-memcached' and not memcached_running:
                             print(f">> Starting memcached on node {node_id}")
@@ -324,7 +325,7 @@ def run_part_3(args):
 
                     is_complete = (
                         info["STATUS"] == "Completed"
-                    ) 
+                    )
 
                     if is_complete:
                         print(f">> Completed job {job} on node {node_id}")
@@ -337,16 +338,17 @@ def run_part_3(args):
                         num_jobs_done += 1
                         print(f">> Job {job_name} failed")
 
-                elif ((not memcached_running and  job == 'some-memcached' ) or memcached_running) and job not in dispatched_jobs:
+                elif ((not memcached_running and job == 'some-memcached') or memcached_running) and job not in dispatched_jobs:
                     print(f">> Starting job {job} on node {node_id}")
                     job_file = f"{schedule_dir}/{job}.yaml"
-                    subprocess.run(['kubectl', 'create', '-f', job_file], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    subprocess.run(['kubectl', 'create', '-f', job_file],
+                                   check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     dispatched_jobs.append(job)
                 else:
                     print(f">> Job {job} is not alive (yet)")
 
             print(f">> Node {node_id}: {running_jobs}")
-    
+
     print(">> All batch jobs completed")
 
     if mcperf_stdout is None:
@@ -359,6 +361,7 @@ def run_part_3(args):
     log_job_time(schedule_dir)
 
     print(">> Finished part 3")
+
 
 def save_mcperf_logs(mcperf_stdout, schedule_dir):
     output = mcperf_stdout.read().decode("utf-8")
@@ -417,24 +420,32 @@ def get_node_info(node_name_beginning):
         stdout=subprocess.PIPE,
     )
     data = parse_result_output(result)
-    node_infos = (node for node in data if node["NAME"].startswith(node_name_beginning))
+    node_infos = (node for node in data if node["NAME"].startswith(
+        node_name_beginning))
     first_matching_node = next(node_infos, None)
     return first_matching_node
+
 
 def does_service_exist(service_name_beginning):
     return get_services_info(service_name_beginning) is not None
 
+
 def get_services_info(service_name_beginning):
-    result = subprocess.run(["kubectl", "get", "services", "-o", "wide", "--show-labels"], check=True, stdout=subprocess.PIPE)
+    result = subprocess.run(["kubectl", "get", "services", "-o",
+                            "wide", "--show-labels"], check=True, stdout=subprocess.PIPE)
     data = parse_result_output(result)
-    matching_services = (service for service in data if service["NAME"].startswith(service_name_beginning))
+    matching_services = (service for service in data if service["NAME"].startswith(
+        service_name_beginning))
     first_matching_service = next(matching_services, None)
     return first_matching_service
 
+
 def get_pod_info(pod_name_beginning):
-    result = subprocess.run(["kubectl", "get", "pods", "-o", "wide", "--show-labels"], check=True, stdout=subprocess.PIPE)
+    result = subprocess.run(["kubectl", "get", "pods", "-o", "wide",
+                            "--show-labels"], check=True, stdout=subprocess.PIPE)
     data = parse_result_output(result)
-    pod_infos = (pod for pod in data if pod["NAME"].startswith(pod_name_beginning))
+    pod_infos = (pod for pod in data if pod["NAME"].startswith(
+        pod_name_beginning))
     first_matching_pod = next(pod_infos, None)
     return first_matching_pod
 
@@ -456,7 +467,8 @@ def parse_execution_times(result):
 def get_total_ms(execution_time):
     mins, seconds_fraction = execution_time.split("m")
     seconds, fraction = seconds_fraction.split(".")
-    total_seconds = int(mins) * 60 + int(seconds) + float(fraction.rstrip("s")) / 1000
+    total_seconds = int(mins) * 60 + int(seconds) + \
+        float(fraction.rstrip("s")) / 1000
     total_ms = int(total_seconds * 1000)
     return total_ms
 
@@ -471,6 +483,7 @@ def create_csv_file(args):
     if not os.path.exists(args.output):
         with open(args.output, "w") as f:
             f.write(header)
+
 
 def create_part3_yaml(args):
     if os.path.exists(args.userYaml):
@@ -488,10 +501,12 @@ def create_part3_yaml(args):
 
     print(f"File '{args.userYaml}' has been created.")
 
+
 def delete_part3_yaml(args):
     if os.path.exists(args.userYaml):
         os.remove(args.userYaml)
         print(f"File '{args.userYaml}' has been removed.")
+
 
 def append_result_to_csv(
     args, benchmark, real, user, sys, interference=None, n_threads=None
@@ -552,7 +567,8 @@ if __name__ == "__main__":
         help="The path to the ssh key for cloud computing",
     )
 
-    parser.add_argument("-c", "--cluster-name", type=str, default="part3.k8s.local")
+    parser.add_argument("-c", "--cluster-name", type=str,
+                        default="part3.k8s.local")
     parser.add_argument(
         "-k",
         "--keep-alive",
@@ -603,6 +619,6 @@ if __name__ == "__main__":
         delete_part3_yaml(args)
     else:
         raise ValueError(f"Unknown task {args.task}")
-    
+
 
 # python CCA-23/run-part-3.py --cca-directory CCA-23  --user mertugrul --task 3
