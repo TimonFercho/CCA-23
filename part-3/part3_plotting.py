@@ -44,17 +44,18 @@ def main():
         "radix" "total time",
     ]
     runtimes = {name: [] for name in jobs}
-    for run in range(3):
+    for run in range(1, 4):
         # TODO: change this
-        latency_path = f"../results_part3/memcached_latency/latency_{run}.txt"
+        latency_path = f"../schedules/scheduleC/latency_{run}.txt"
         df_lat = pd.read_csv(latency_path, delim_whitespace=True)
         df_lat["p95"] = df_lat["p95"].divide(1000.0)  # convert to ms
 
         # TODO: run get_time.py to get a csv
         # TODO: change this to match file path
         log_df = pd.read_csv(
-            f"../results_part3/results{run}.csv", skipinitialspace=True
+            f"../schedules/scheduleC/results_{run}.csv", skipinitialspace=True
         )
+        
         controller_time_end = int(log_df.iloc[-1]["timestamp"])
         controller_time_start = int(log_df.iloc[-2]["timestamp"])
         timestamps = list(
