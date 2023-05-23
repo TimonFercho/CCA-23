@@ -1,0 +1,8 @@
+name,start,end,machine
+parsec-blackscholes,4.0,75.0,node-c-8core
+parsec-canneal,0.0,175.0,node-a-2core
+parsec-dedup,83.0,135.0,node-c-8core
+parsec-ferret,1.0,112.0,node-b-4core
+parsec-freqmine,1.0,126.0,node-c-8core
+parsec-radix,144.0,153.0,node-c-8core
+parsec-vips,118.0,158.0,node-b-4core
