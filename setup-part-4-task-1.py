@@ -171,8 +171,6 @@ def run_part_4(args):
     )
     print(f">> Finished setting up part {args.task}")
 
-    # Num cores = 1, beginning CPU measurement script, measuring fro 20 seconds to let mcperf p and end within measruement period
-
     print(">> Creating remote log folder")
     run_benchmark_cmd = "mkdir /home/ubuntu/part-4-logs"
     (stdin, stdout, stderr) = memcached_server.exec_command(run_benchmark_cmd)
@@ -185,17 +183,17 @@ def run_part_4(args):
 
     run_benchmark(cores=1)
 
-    # sleep(5)
+    sleep(5)
 
     # ------------ Running for 2 cores ---------------
 
-    # run_benchmark(memcached_server_ip, cores=2)
+    run_benchmark(cores=2)
 
 
 def run_benchmark(cores=1):
     print(f">> Running benchmarking script on memcached vm with {cores} cores")
 
-    run_benchmark_cmd = f"sudo python3 /home/ubuntu/part-4-vm-scripts/cpu-benchmark.py --cores {cores} --time 180 --log-path /home/ubuntu/part-4-logs"
+    run_benchmark_cmd = f"sudo python3 /home/ubuntu/part-4-vm-scripts/cpu-benchmark.py --time 180 --log-path /home/ubuntu/part-4-logs --cores {cores} "
     (stdin, mc_stdout, stderr) = memcached_server.exec_command(run_benchmark_cmd)
 
     print(">> Starting mcperf agent and measure")
@@ -207,16 +205,16 @@ def run_benchmark(cores=1):
     print(">> Saving benchmark results to text file")
     save_memcached_logs(mc_stdout, cores)
 
-    # attempting to copy remote log folder to local file system as a n alterantive logging method
-
-    # FIXME: this is not working
+    # FIXME: scp not working
+    # print(">> Retrieving logs from memcached vm")
     # result = subprocess.run(
-    #     f"{args.gcloud_bin_dir}/gcloud compute scp --scp-flag=-r ubuntu@{memcached_server_name}:/home/ubuntu/part-4-logs ./part-4/ --zone europe-west3-a".split(
-    #         " "),
+    #     f"{args.gcloud_bin_dir}/gcloud compute scp --scp-flag=-r ubuntu@{memcached_server_name}:/home/ubuntu/part-4-logs/ ./part-4/ --zone europe-west3-a".split(
+    #     " "),
     #     check=True,
     #     stdout=subprocess.PIPE,
     #     stderr=subprocess.PIPE,
     # )
+
     # print(f">> scp output: {result.stdout}")
     # print(f">> scp error: {result.stderr}")
 
@@ -455,7 +453,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--gcloud_bin_dir",
+        "--gcloud-bin-dir",
         type=str,
         default=".",
         help="The path to the gcloud directory",
