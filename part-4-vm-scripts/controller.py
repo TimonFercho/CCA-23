@@ -83,13 +83,13 @@ def run_part_4(args):
             #memcached_expanded = False
 
             # memcached needs to expand
-            if schedule.mc_cores == 1 and all_cpus_util[0] > 75:  #mc_util > 70:
+            if schedule.mc_cores == 1 and all_cpus_util[0] > 50:  
                 schedule.update_for_memcached(mc_cores=2)
                 set_memcached_cpu(memcached_pid, no_of_cpus=2)
                 #memcached_expanded = True
 
             # memcached is allowed to retract
-            elif schedule.mc_cores == 2 and  all_cpus_util[0] + all_cpus_util[1] < 60: #mc_util < 120:
+            elif schedule.mc_cores == 2 and  all_cpus_util[0] + all_cpus_util[1] < 40: 
                 set_memcached_cpu(memcached_pid, no_of_cpus=1)
                 schedule.update_for_memcached(mc_cores=1)
 

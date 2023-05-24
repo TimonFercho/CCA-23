@@ -87,6 +87,7 @@ class ParsecJob:
         self.started = False
         self.paused = False
         self.removed = False
+        self.completed = False
         self.accum_runtime = 0
         self.init_time = 0
         self.container = None
@@ -244,7 +245,7 @@ class Schedule:
         job_ids_to_remove = [[],[],[],[]]
 
         for idx, job in enumerate(self.job_list):
-            if job.removed: return
+            if job.removed or job.completed: return
             job.container.reload()
             if job.container.status == "exited":
                 if not "Done" in str(job.container.logs()).split()[-1]:
@@ -264,6 +265,7 @@ class Schedule:
         for core_int in range(1,4): #skip core 0
             for job_id in job_ids_to_remove[core_int]:
                 self.running_jobs[core_int].remove(job_id)
+                self.job_list[job_id].completed = True
 
     
 
