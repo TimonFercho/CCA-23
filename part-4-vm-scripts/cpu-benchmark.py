@@ -35,22 +35,23 @@ def create_csv_file(args):
 
 def run_cpu_benchmark(args):
     create_csv_file(args)
-    mc_pid = get_pid()
     print(f"Logging CPU usage for {args.time} seconds")
-    print(f"Sampling interval: {args.sampling_interval} ms")
+    print(f"Sampling interval: {args.sampling_interval} s")
     n_samples = int(args.time/args.sampling_interval)
     print(f"Total samples: {n_samples}")
     for _ in range(n_samples):
-        log_cpu_usage(args, mc_pid)
+        log_cpu_usage(args)
         time.sleep(args.sampling_interval)
 
 
-def log_cpu_usage(args, pid):
-    mc_proc = psutil.Process(pid)
+def log_cpu_usage(args):
+    all_cpus_util = psutil.cpu_percent(interval=None, percpu=True)
+    used_cores_util = all_cpus_util[:args.cores]
+    total_cpu_util = sum(used_cores_util)
     time_since_epoch_ms = int(time.time() * 1000)
-    cpu_usage = mc_proc.cpu_percent(interval=None)
 
-    line = f"{time_since_epoch_ms},{cpu_usage}"
+
+    line = f"{time_since_epoch_ms},{total_cpu_util}"
     print(line)
 
     logfile = get_logfile(args, args.cores)
