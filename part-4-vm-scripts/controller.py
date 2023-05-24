@@ -6,6 +6,8 @@ from datetime import datetime
 import time 
 import psutil
 
+import parsecs
+
 
 MEMCACHED_INITIAL_N_CORES = 1
 
@@ -29,34 +31,6 @@ def create_csv_file(args):
     if not os.path.exists(filepath):
         with open(filepath, "w") as f:
             f.write(header)
-        
-
-def run_cpu_benchmark(args):
-
-    #setting number of cores
-    set_memcached_cpu(memcached_pid, args.cores)
-
-    total_time = args.time
-    sampling_interval = 0.2
-
-    for i in range(int(total_time/sampling_interval)):
-        get_cpu_usage()
-        time.sleep(sampling_interval)
-
-
-def get_cpu_usage(mc_pid, print_log=True):
-    #psutil.cpu_percent(interval=None, percpu=True)
-    mc_proc = psutil.Process(mc_pid)
-    time_since_epoch_ms = int(time.time() * 1000)
-    cpu_usage = mc_proc.cpu_percent(interval=None)
-
-    line = f"{time_since_epoch_ms},{cpu_usage}"
-    if print_log:
-        print(line)
-    
-    with open(filepath, "a") as f:
-        f.write(line)
-
 
 
 def init_memcached_config():
@@ -91,6 +65,43 @@ def start_memcached(logger):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+
+
+def run_part_4(args):
+
+    #setting number of cores
+    set_memcached_cpu(memcached_pid, args.cores)
+    mc_process = psutil.Process(memcached_pid)
+
+    schedule = parsecs.Schedule(mc_cores= args.cores)
+
+    sampling_interval = 0.1
+
+    while(not schedule.is_complete()):
+
+        all_cpus_util = psutil.cpu_percent(interval=None, percpu=True)
+        #mc_util = mc_process.cpu_percent() 
+
+        #memcached_expanded = False
+
+        # check currently running jobs, remove cotnainers if jobs are finished
+        schedule.update_state()
+
+        # memcached needs to expand
+        if schedule.mc_cores == 1 and all_cpus_util[0] + all_cpus_util[1] > 75:  #mc_util > 70:
+            schedule.update_for_memcached(mc_cores=2)
+            set_memcached_cpu(memcached_pid, no_of_cpus=2)
+            #memcached_expanded = True
+
+        # memcached is allowed to retract
+        elif schedule.mc_cores == 2 and  all_cpus_util[0] + all_cpus_util[1] < 60: #mc_util < 120:
+            set_memcached_cpu(memcached_pid, no_of_cpus=1)
+            schedule.update_for_memcached(mc_cores=1)
+
+        #optmize parsec job scheduling
+        schedule.update_internal_parsec(all_cpus_util)
+
+        time.sleep(sampling_interval)
 
 
 
@@ -128,7 +139,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     set_pid()
-    run_cpu_benchmark(args)
+    run_part_4(args)
 
 
 
