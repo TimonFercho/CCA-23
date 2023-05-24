@@ -12,7 +12,7 @@ import pandas as pd
 from time import sleep
 
 
-MEMCACHED_N_THREADS = 1
+MEMCACHED_N_THREADS = 2
 
 
 client_agent = paramiko.SSHClient()
@@ -153,13 +153,15 @@ def run_part_4(args, setup=False):
     memcached_server_info = get_node_info("memcache-server")
     memcached_server_name = memcached_server_info["NAME"]
 
-    result = subprocess.run(
-        f"{args.gcloud_bin_dir}/gcloud compute scp --recursive --scp-flag=-r /part-4-vm-scripts ubuntu@{memcached_server_name}:/home/ubuntu/ --zone europe-west3-a".split(
-            " "),
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    print(f"gcloud compute scp --scp-flag=-r {args.cca_directory}/part-4-vm-scripts ubuntu@{memcached_server_name}:/home/ubuntu/ --zone europe-west3-a")
+
+    #result = subprocess.run(
+    #    f"gcloud compute scp --scp-flag=-r {args.cca_directory}/part-4-vm-scripts ubuntu@{memcached_server_name}:/home/ubuntu/ --zone europe-west3-a".split(
+    #        " "),
+    #    check=True,
+    #    stdout=subprocess.PIPE,
+    #    stderr=subprocess.PIPE,
+    #)
     print(f">> Finished setting up part {args.task}")
 
     # Num cores = 1, beginning CPU measurement script, measuring fro 20 seconds to let mcperf p and end within measruement period
@@ -167,10 +169,29 @@ def run_part_4(args, setup=False):
     print(">> Creating remote log folder")
     run_benchmark_cmd = "mkdir /home/ubuntu/part-4-logs"
     (stdin, stdout, stderr) = memcached_server.exec_command(run_benchmark_cmd)
+    print(stdout)
+    print(stderr)
 
     print(">> Installing psutil")
-    install_psutil_cmd = "sudo apt install python3-pip --yes;pip3 install psutil"
+    install_psutil_cmd = "sudo apt install python3-pip --yes"
     (stdin, stdout, stderr) = memcached_server.exec_command(install_psutil_cmd)
+    print(stdout)
+    print(stderr)
+
+    install_psutil_cmd = "pip3 install psutil"
+    (stdin, stdout, stderr) = memcached_server.exec_command(install_psutil_cmd)
+    print(stdout)
+    print(stderr)
+
+    install_cmd = "pip3 install docker"
+    (stdin, stdout, stderr) = memcached_server.exec_command(install_cmd)
+    print(stdout)
+    print(stderr)
+
+    install_cmd = "sudo usermod -a -G docker User"
+    (stdin, stdout, stderr) = memcached_server.exec_command(install_cmd)
+    print(stdout)
+    print(stderr)
 
     # ------------ Running for 1 core ---------------
 
@@ -184,10 +205,14 @@ def run_policy(cores=1):
     print(">> Starting mcperf agent and measure")
     stdout_mcperf = start_mcperf()
 
+    return
+
+    print(">> Starting scheduling")
     run_benchmark_cmd = f"sudo python3 /home/ubuntu/part-4-vm-scripts/controller.py --cores {cores} --log-path /home/ubuntu/part-4-logs"
     (stdin, schedule_stdout, stderr) = memcached_server.exec_command(run_benchmark_cmd)
 
     save_shedule_logs(schedule_stdout)
+    save_shedule_logs(schedule_stdout, error=True)
 
     print(f">> Collecting output from mcperf measure")
     save_mcperf_logs(stdout_mcperf, cores)
@@ -232,15 +257,16 @@ def start_mcperf():
     terminate_mcperf()
 
     print(">> Starting mcperf on client-agent")
-    client_agent.exec_command("cd memcache-perf-dynamic; ./mcperf -T 16 -A &")
+    client_agent.exec_command("cd memcache-perf-dynamic; ./mcperf -T 16 -A")
 
     client_measure_command_benchmarking = (
         f"cd memcache-perf-dynamic;"
         f"./mcperf -s {memcached_ip} --loadonly;"
         + f"./mcperf -s {memcached_ip} -a {client_agent_IP} "
-        + "--noload -T 16 -C 4 -D 4 -Q 1000 -c 4 -t 5 "
-        + "--scan 5000:125000:5000"
+        + "--noload -T 16 -C 4 -D 4 -Q 1000 -c 4 -t -t 1800 "
+        + "--qps_interval 10 --qps_min 5000 --qps_max 100000 --qps_seed 3274"
     )
+
     print(
         f">> Starting mcperf on client-measure with command: {client_measure_command_benchmarking}")
     _, mcperf_stdout, mcperf_stderr = client_measure.exec_command(
@@ -252,16 +278,19 @@ def save_memcached_logs(stdout, cores):
     output = stdout.read().decode("utf-8")
     print(">> Saving memcached logs to txt file")
 
-    txt_filename = f"part-4/cores-{cores}/memcached_logs.txt"
+    txt_filename = f"part-4/memcached_logs.txt"
 
     with open(txt_filename, "w") as f:
         f.write(output)
 
-def save_shedule_logs(stdout):
+def save_shedule_logs(stdout, error=False):
     output = stdout.read().decode("utf-8")
-    print(">> Saving shedule logs to txt file")
-
-    txt_filename = f"part-4/schedule_logs.txt"
+    if error:
+        print(">> Saving shedule error to txt file")
+        txt_filename = f"part-4/schedule_errors.txt"
+    else:
+        print(">> Saving shedule logs to txt file")
+        txt_filename = f"part-4/schedule_logs.txt"
 
     with open(txt_filename, "w") as f:
         f.write(output)
@@ -274,7 +303,7 @@ def save_mcperf_logs(mcperf_stdout, cores):
     print(">> Reading mcperf logs")
     output = mcperf_stdout.read().decode("utf-8")
 
-    txt_filename = f"part-4/cores-{cores}/mcperf-output.txt"
+    txt_filename = f"part-4/mcperf-output.txt"
 
     print(f">> Saving mcperf logs to {txt_filename}")
     with open(txt_filename, 'w') as f:

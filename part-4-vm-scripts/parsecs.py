@@ -2,6 +2,7 @@ import functools
 import docker
 import scheduler_logger
 import time
+import subprocess
 
 schedule_logger = scheduler_logger.SchedulerLogger()
 
@@ -55,7 +56,7 @@ freqmine_dict = {"name":"freqmine",
                      "interference": "something"
                      }
 
-radix_dict = {"name":" radix",
+radix_dict = {"name":"radix",
                      "docker_img":"anakli/cca:splash2x_radix",
                      "command": "./run -a run -S splash2x -p radix -i native -n 1",
                      "max_cores": 1,
@@ -76,9 +77,10 @@ parsec_list = [blackscholes_dict, canneal_dict, dedup_dict, ferret_dict,freqmine
 
 @functools.total_ordering
 class ParsecJob:
-    def __init__(self, name, docker_img, max_cores, runtime, interference):
+    def __init__(self, name, docker_img, command, max_cores, runtime, interference):
         self.name = name 
         self.docker_img = docker_img
+        self.command = command
         self.max_cores = max_cores
         self.runtime = runtime
         self.interference = interference
@@ -91,14 +93,14 @@ class ParsecJob:
 
     # schedule list priority comparison
     def __eq__(self, other):
-        if not self._is_valid_operand(other):
-            return NotImplemented
+        #if not self._is_valid_operand(other):
+        #    return NotImplemented
         return ((self.runtime, self.max_cores) ==
                 (other.runtime, other.max_cores))
     
     def __gt__(self, other):
-        if not self._is_valid_operand(other):
-            return NotImplemented
+        #if not self._is_valid_operand(other):
+        #    return NotImplemented
         return self.max_cores > other.max_cores or ( self.max_cores == other.max_cores and self.runtime >  other.runtime ) 
 
     def set_container(self, container):
@@ -117,13 +119,13 @@ class ParsecJob:
         self.container.reload()
         self.container.start()
         self.started =True
-        schedule_logger.job_start(self.name)
+        schedule_logger.job_start(self.name, initial_cores=self.cores, initial_threads=self.max_cores)
         self.init_time = time.time()
 
     def update_cores(self, cpu_set):
         cpu_set_str = ','.join(cpu_set)
         self.container.reload()
-        self.container.update(cpuset_cpus=cpu_set)
+        self.container.update(cpuset_cpus=cpu_set_str)
         schedule_logger.update_cores(self.name, cores=cpu_set)
         self.cores = cpu_set
 
@@ -151,6 +153,9 @@ class ParsecJob:
         schedule_logger.job_unpause(self.name)
 
     def remove(self):
+        if self.container == None:
+            return  # already removed
+        
         if self.container.status == "exited":
             self.accum_runtime = self.accum_runtime + time.time() - self.init_time
         try:
@@ -170,6 +175,8 @@ class ParsecJob:
 class Schedule:
     def __init__(self, mc_cores):
 
+        print("creating schedule")
+
         self.mc_cores = mc_cores
 
         self.parsec_cores = range(mc_cores, 4)
@@ -179,10 +186,16 @@ class Schedule:
         # stores the actual list of job wrapper object in sorted order according to job attributes
         self.job_list = [ParsecJob(name=job["name"], 
                                    docker_img=job["docker_img"], 
+                                   command=job["command"], 
                                    max_cores=job["max_cores"], 
                                    runtime=job["runtime"],
                                    interference=job["interference"]) for job in parsec_list]
         self.job_list.sort(reverse=True)
+
+        for i , job in enumerate(self.job_list): 
+            subprocess.run(
+             f"docker pull {self.job_list[i].docker_img}".split(" "),
+            check=True)
 
         for i , job in enumerate(self.job_list): 
             self.job_list[i].set_container( self.docker_client.containers.create(cpuset_cpus=",".join(map(str, sorted(range(3,3-job.max_cores, -1)))), name=job.name, detach=True,
@@ -196,7 +209,7 @@ class Schedule:
         # stores idx s mapping to locations of jobs in job_list
         self.completed_jobs = []
 
-        self.job_priority_queue = range(len(self.job_list))
+        self.job_priority_queue = list(range(len(self.job_list)))
 
 
     def is_complete(self):
@@ -220,17 +233,25 @@ class Schedule:
                 self.running_jobs[core_int].remove(job_id)
 
     def update_state(self):
-        for core_int in range(1,self.running_jobs): #skip core 0
+        job_ids_to_remove = [[],[],[],[]]
+
+        for core_int in range(1,len(self.running_jobs)): #skip core 0
             for idx, job_id in enumerate(self.running_jobs[core_int]):
                 self.job_list[job_id].container.reload()
                 if self.job_list[job_id].container.status == "exited":
                     if not "Done" in str(self.job_list[job_id].container.logs()).split()[-1]:
                         print(f"JOB FAILED: {self.job_list[job_id].name}")
 
-                    self.job_list[job_id].remove()
+                    if job_id not in job_ids_to_remove[core_int]:
+                        self.job_list[job_id].remove()
+                        self.completed_jobs.append(job_id)
+                        job_ids_to_remove[core_int].append(job_id)
                     #schedule_logger.job_end(self.job_list[job_id].container.name)
-                    self.running_jobs[core_int].remove(job_id)
-                    self.completed_jobs.add(job_id)
+                    #self.running_jobs[core_int].remove(job_id)
+
+        for core_int in range(1,4): #skip core 0
+            for job_id in enumerate(job_ids_to_remove[core_int]):
+                self.running_jobs[core_int].remove(job_id)
 
     
 
@@ -241,11 +262,13 @@ class Schedule:
         if self.mc_cores < mc_cores:
             self.clear_parsecs_on_core("1")
             self.mc_cores = mc_cores
+            schedule_logger.update_cores("memcached", ["0","1"])
             #self.parsec_cores = range(mc_cores, 4)
             return True
 
         elif self.mc_cores > mc_cores:
             self.mc_cores = mc_cores
+            schedule_logger.update_cores("memcached", ["0"])
             # map(str, range(mc_cores, 4))
             #self.parsec_cores = range(mc_cores, 4)
             # new core freed up
@@ -260,14 +283,15 @@ class Schedule:
 
         print("--------------- CURRENT SYSTEM STATUS -----------------")
         print("--------------- PRIOITY QUEUE -----------------")
-        print([self.job_list[job_id].name for job_idx in self.job_priority_queue])
-        print(self.running_jobs)
+        print([self.job_list[job_idx].name for job_idx in self.job_priority_queue])
         print("--------------- RUNNING JOBS -----------------")
         print(self.running_jobs)
         print("--------------- PAUSED JOBS -----------------")
         print(self.paused_jobs )
         print("--------------- COMPLETED JOBS -----------------")
         print(self.completed_jobs )
+        print("--------------- ALL CORES CPU -----------------")
+        print(all_cpus_util )
 
 
         # cpu utilizations
@@ -307,11 +331,19 @@ class Schedule:
                     remaining_cores = list(set(free_core_set) - set(allocated_cores))
                     remaining_cores = list(set(remaining_cores) - set(altered_cores))
 
-                    # if no other ocres present to switch the job to, we pause it
+                    # if no other cores present to switch the job to, we pause it
                     if not remaining_cores:
-                        self.job_list[job_id].pause()
-                        self.paused_jobs.append(job_id)
+                        if len(allocated_cores) == 1:
+                            self.job_list[job_id].pause()
+                            self.paused_jobs.append(job_id)
+                        else:
+                            # remove overloaded core
+                            new_cores_set = set(allocated_cores) - set(str(core_num)) 
+                            new_cores_list = list(new_cores_set)
+                            self.job_list[job_id].update_cores(new_cores_list)
+
                         self.running_jobs[core_num].remove(job_id)
+
                     # there are cores to switch to!
                     else:
                         # remove overloaded core
@@ -322,7 +354,7 @@ class Schedule:
 
                         self.job_list[job_id].update_cores(new_cores_list)
                         self.running_jobs[core_num].remove(job_id)
-                        self.running_jobs[remaining_cores[0]].append(job_id)
+                        self.running_jobs[int(remaining_cores[0])].append(job_id)
 
                         altered_cores.append(remaining_cores[0])
 
@@ -330,8 +362,6 @@ class Schedule:
 
                     if len(altered_cores) == len(free_core_set):
                         return
-
-
 
 
         # ------------------------------- UNPAUSING STAGE ---------------------------------------------------------
@@ -362,7 +392,7 @@ class Schedule:
                     
                 elif resource_demand == 1 and len(remaining_cores) >= 1:
                     # get remaining unassigned cores
-                    self.job_list[job_id].update_cores(remaining_cores)
+                    self.job_list[job_id].update_cores([remaining_cores[0]])
 
                     # avoid modifying list while iterating
                     #self.paused_jobs.remove(job_id)
@@ -388,7 +418,7 @@ class Schedule:
 
         remaining_cores = list(set(free_core_set) - set(altered_cores))
 
-        for core_int in range(1,self.running_jobs): # skipping core 0
+        for core_int in range(1,len(self.running_jobs)): # skipping core 0
             for idx, job_id in enumerate(self.running_jobs[core_int]):
                 # if job wants 2 or 3 cores but only has one 
                 if (len(self.job_list[job_id].cores) == 1 and self.job_list[job_id].max_cores >= 2) and remaining_cores:
@@ -396,7 +426,7 @@ class Schedule:
                     expandable_cores = list(set(remaining_cores) - set(self.job_list[job_id].cores))
                     if expandable_cores:
                         self.job_list[job_id].add_core(expandable_cores[0])
-                        self.running_jobs[expandable_cores[0]].append(job_id)
+                        self.running_jobs[int(expandable_cores[0])].append(job_id)
                         altered_cores.append(expandable_cores[0])
 
                         if len(altered_cores) == len(free_core_set):
@@ -466,7 +496,7 @@ class Schedule:
 
             remaining_cores = list(set(free_core_set) - set(altered_cores))
 
-            for core_int in range(1,self.running_jobs): # skipping core 0
+            for core_int in range(1,len(self.running_jobs)): # skipping core 0
                 for idx, job_id in enumerate(self.running_jobs[core_int]):
                     # if job wants 2 or 3 cores but only has one 
                     if (len(self.job_list[job_id].cores) == 1 and self.job_list[job_id].max_cores >= 2) and remaining_cores:
