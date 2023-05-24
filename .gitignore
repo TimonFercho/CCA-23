@@ -1,0 +1,4 @@
+__pycache__/
+.vscode/
+.vscode/settings.json
+part3-*.yaml

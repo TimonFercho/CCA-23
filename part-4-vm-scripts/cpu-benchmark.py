@@ -1,89 +1,72 @@
 import os
 import subprocess
-import sys
 import argparse
-from datetime import datetime
-import time 
+import time
 import psutil
 
 
 MEMCACHED_INITIAL_N_CORES = 2
 
-memcached_pid = None
 
-filepath = ""
-
-def set_pid(process_name = "memcache"):
-    for proc in psutil.process_iter():
-        if process_name in proc.name():
-            memcached_pid = proc.pid
+def get_pid(process_name="memcache"):
+    for proc in psutil.process_iter(['pid', 'name', 'exe']):
+        if process_name in proc.info['name']:
+            memcached_pid = proc.info['pid']
+            binary_path = proc.info['exe']
+            print(
+                f"Found {process_name} at {binary_path} with pid {memcached_pid}")
             return memcached_pid
-        
+
+
+def get_logfile(args, cores):
+    logfile = os.path.join(args.log_path, f"cpu-{cores}-cores.csv")
+    return logfile
+
+
 def create_csv_file(args):
-
     header = "timestamp,cpu_usage\n"
+    logfile = get_logfile(args, args.cores)
+    print(header)
 
-    filename = "memcached_cpu_usage_cores{args.cores}_threads2.csv"
-    filepath = os.path.join(args.log_path, filename)
-
-    if not os.path.exists(filepath):
-        with open(filepath, "w") as f:
+    if not os.path.exists(logfile):
+        with open(logfile, "w") as f:
             f.write(header)
-        
+
 
 def run_cpu_benchmark(args):
+    create_csv_file(args)
+    mc_pid = get_pid()
+    print(f"Logging CPU usage for {args.time} seconds")
+    print(f"Sampling interval: {args.sampling_interval} ms")
+    n_samples = int(args.time/args.sampling_interval)
+    print(f"Total samples: {n_samples}")
+    for _ in range(n_samples):
+        log_cpu_usage(args, mc_pid)
+        time.sleep(args.sampling_interval)
 
-    #setting number of cores
-    set_memcached_cpu(memcached_pid, args.cores)
 
-    total_time = args.time
-    sampling_interval = 0.2
-
-    for i in range(int(total_time/sampling_interval)):
-        get_cpu_usage()
-        time.sleep(sampling_interval)
-
-
-def get_cpu_usage(mc_pid, print_log=True):
-    #psutil.cpu_percent(interval=None, percpu=True)
-    mc_proc = psutil.Process(mc_pid)
+def log_cpu_usage(args, pid):
+    mc_proc = psutil.Process(pid)
     time_since_epoch_ms = int(time.time() * 1000)
     cpu_usage = mc_proc.cpu_percent(interval=None)
 
     line = f"{time_since_epoch_ms},{cpu_usage}"
-    if print_log:
-        print(line)
-    
-    with open(filepath, "a") as f:
-        f.write(line)
+    print(line)
+
+    logfile = get_logfile(args, args.cores)
+    with open(logfile, "a") as f:
+        f.write(line + "\n")
 
 
-
-def init_memcached_config():
-    process_name = "memcache"
-
-    # Find the pid of memcache
-    for proc in psutil.process_iter():
-        if process_name in proc.name():
-            memcached_pid = proc.pid
-            break
-    
-    #command = f"sudo renice -n -19 -p {pid}"
-    #subprocess.run(command.split(" "), stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-    # Set the cpu affinity of memcached to CPU 0
-    return set_memcached_cpu( memcached_pid, MEMCACHED_INITIAL_N_CORES)
+def set_memcached_cpu(args):
+    mc_pid = get_pid()
+    cpu_affinity = ",".join(map(str, range(0, args.cores)))
+    command = f'sudo taskset -a -cp {cpu_affinity} {mc_pid}'
+    subprocess.run(command.split(" "), stdout=subprocess.DEVNULL,
+                   stderr=subprocess.STDOUT)
 
 
-def set_memcached_cpu(pid, no_of_cpus, logger):
-    cpu_affinity = ",".join(map(str, range(0, no_of_cpus)))
-    print(f'Setting Memcached CPU affinity to {cpu_affinity}')
-    command = f'sudo taskset -a -cp {cpu_affinity} {pid}'
-    #logger.log_memchached_state(no_of_cpus)
-    subprocess.run(command.split(" "), stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-    return pid, no_of_cpus
-
-
-def start_memcached(logger):
+def start_memcached():
     restart_memcached_cmd = "sudo systemctl restart memcached"
     result = subprocess.run(
         restart_memcached_cmd.split(" "),
@@ -91,16 +74,6 @@ def start_memcached(logger):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-
-
-"""
-if __name__ == "__main__":
-    mc_pid, no_of_cpus = init_memcached_config(logger)
-    start_memcached(logger)
-    while True:
-        print_cpu_usage(mc_pid)
-        time.sleep(1)
-"""
 
 
 if __name__ == "__main__":
@@ -122,21 +95,28 @@ if __name__ == "__main__":
         type=int,
         help="measurement period in seconds ",
         required=True,
-        default=20
+        default=180
     )
     parser.add_argument(
         "-p",
         "--log-path",
-        type=int,
+        type=str,
         help="specify folder for logging output ",
         required=True,
-        default=20
+        default="../part-4-vm-logs/"
+    )
+
+    parser.add_argument(
+        "-s",
+        "--sampling-interval",
+        type=float,
+        help="specify sample interval in seconds ",
+        required=False,
+        default=5.0
     )
 
     args = parser.parse_args()
 
-    set_pid()
+    start_memcached()
+    set_memcached_cpu(args)
     run_cpu_benchmark(args)
-
-
-

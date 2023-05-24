@@ -32,14 +32,6 @@ memcached_server_name = ""
 
 client_agent_info = memcached_server_info = client_measure_info = {}
 
-client_command = "sudo sh -c 'echo deb-src http://europe-west3.gce.archive.ubuntu.com/ubuntu/ bionic main restricted >> /etc/apt/sources.list' "
-client_command += "sudo apt-get update \n"
-client_command += "sudo apt-get install libevent-dev libzmq3-dev git make g++ --yes \n"
-client_command += "sudo apt-get build-dep memcached --yes \n"
-client_command += "git clone https://github.com/eth-easl/memcache-perf-dynamic.git \n"
-client_command += "cd memcache-perf-dynamic \n"
-client_command += "make"
-
 
 def connect_mcperfs():
     print(">> Setting up SSH connection to compile mcperf")
@@ -92,21 +84,33 @@ def setup_memcached():
 
     (stdin, stdout, stderr) = memcached_server.exec_command(
         install_and_configure_memcached_cmd)
-    print("Setup log for memcached server: ",
-          install_and_configure_memcached_cmd, stdout.read(), stderr.read())
+    # print("Setup log for memcached server: ",
+    #   install_and_configure_memcached_cmd, stdout.read(), stderr.read())
 
 
 def setup_mcperf():
-    # (stdin, stdout, stderr) = client_agent.exec_command(client_command)
-    # print(">> Setup log for client agent: ", stdout.read(), stderr.read())
 
-    # (stdin, stdout, stderr) = client_measure.exec_command(client_command)
-    # print(">> Setup log for client measure: ", stdout.read(), stderr.read())
-    # print(">> Compiling mcperf")
-    _, _, stderr_a = client_agent.exec_command(client_command)
-    _, _, stderr_measure = client_measure.exec_command(client_command)
-    print(f'agent output: {stderr_a.read()}')
-    print(f'measure output: {stderr_measure.read()}')
+    client_command = "sudo sh -c 'echo deb-src http://europe-west3.gce.archive.ubuntu.com/ubuntu/ bionic main restricted >> /etc/apt/sources.list' \n"
+    client_command += "sudo apt-get update \n"
+    client_command += "sudo apt-get install libevent-dev libzmq3-dev git make g++ --yes \n"
+    client_command += "sudo apt-get build-dep memcached --yes \n"
+    client_command += "git clone https://github.com/eth-easl/memcache-perf-dynamic.git \n"
+    client_command += "cd memcache-perf-dynamic \n"
+    client_command += "make"
+
+    print(">> Compiling mcperf")
+    # print(">> Command: ", client_command)
+    (stdin, stdout, stderr) = client_agent.exec_command(client_command)
+    client_agent_stdout = stdout.read()
+    client_agent_stderr = stderr.read()
+    print(
+        f">> Setup log for client agent:\n{client_agent_stdout} \n\n {client_agent_stderr}")
+
+    (stdin, stdout, stderr) = client_measure.exec_command(client_command)
+    client_measure_stdout = stdout.read()
+    client_measure_stderr = stderr.read()
+    print(
+        f">> Setup log for client measure:\n{client_measure_stdout} \n\n {client_measure_stderr}")
 
 
 def terminate_mcperf():
@@ -145,74 +149,69 @@ def spin_up_cluster(args):
                         "--wait", "10m"], check=True)
         print(">> Cluster deployed successfully")
 
+
+def run_part_4(args):
     connect_mcperfs()
 
     setup_memcached()
 
     setup_mcperf()
 
-    # print(f">> mcperf and memcached setup complete, copying benchmarking script to the memcached vm")
+    print(f">> mcperf and memcached setup complete, copying benchmarking script to the memcached vm")
 
-    # memcached_server_info = get_node_info("memcache-server")
-    # memcached_server_name = memcached_server_info["NAME"]
+    memcached_server_info = get_node_info("memcache-server")
+    memcached_server_name = memcached_server_info["NAME"]
 
-    # result = subprocess.run(
-    #     f"{args.gcloud_bin_dir}/gcloud compute scp --scp-flag=-r part-4-vm-scripts/ ubuntu@{memcached_server_name}:/home/ubuntu/ --zone europe-west3-a".split(
-    #         " "),
-    #     check=True,
-    #     stdout=subprocess.PIPE,
-    #     stderr=subprocess.PIPE,
-    # )
+    result = subprocess.run(
+        f"{args.gcloud_bin_dir}/gcloud compute scp --scp-flag=-r part-4-vm-scripts/ ubuntu@{memcached_server_name}:/home/ubuntu/ --zone europe-west3-a".split(
+            " "),
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     print(f">> Finished setting up part {args.task}")
 
-
-def run_part_4(args):
-    memcached_server_info = get_node_info("memcache-server")
-    memcached_server_ip = memcached_server_info["INTERNAL-IP"]
-
-    # Num cores = 1, beginning CPU measurement script, measuring fro 20 seconds to let mcperf start and end within measruement period
+    # Num cores = 1, beginning CPU measurement script, measuring fro 20 seconds to let mcperf p and end within measruement period
 
     print(">> Creating remote log folder")
-
-    # Creating output folder
-    run_benchmark_cmd = "sudo mkdir /home/ubuntu/part-4-logs"
+    run_benchmark_cmd = "mkdir /home/ubuntu/part-4-logs"
     (stdin, stdout, stderr) = memcached_server.exec_command(run_benchmark_cmd)
+
+    print(">> Installing psutil")
+    install_psutil_cmd = "sudo apt install python3-pip --yes;pip3 install psutil"
+    (stdin, stdout, stderr) = memcached_server.exec_command(install_psutil_cmd)
 
     # ------------ Running for 1 core ---------------
 
-    run_benchmark(memcached_server_ip, cores=1)
+    run_benchmark(cores=1)
 
-    sleep(5)
+    # sleep(5)
 
     # ------------ Running for 2 cores ---------------
 
     # run_benchmark(memcached_server_ip, cores=2)
 
 
-def run_benchmark(memcached_server_ip, cores=1):
+def run_benchmark(cores=1):
     print(f">> Running benchmarking script on memcached vm with {cores} cores")
 
-    run_benchmark_cmd = f"sudo python3 /home/ubuntu/part-4-vm-scripts/cpu-benchmark.py --cores {cores} --time 20 --log-path /home/ubuntu/part-4-logs"
-    (stdin, stdout, stderr) = memcached_server.exec_command(run_benchmark_cmd)
+    run_benchmark_cmd = f"sudo python3 /home/ubuntu/part-4-vm-scripts/cpu-benchmark.py --cores {cores} --time 180 --log-path /home/ubuntu/part-4-logs"
+    (stdin, mc_stdout, stderr) = memcached_server.exec_command(run_benchmark_cmd)
 
     print(">> Starting mcperf agent and measure")
-    stdout_mcperf = start_mcperf(memcached_server_ip)
+    stdout_mcperf = start_mcperf()
 
-    # waiting for mcperf to complete
-    sleep(11)
+    print(f">> Collecting output from mcperf measure")
+    save_mcperf_logs(stdout_mcperf, cores)
 
     print(">> Saving benchmark results to text file")
-    output_cpu = stdout.read()
-    save_memcached_logs(output_cpu)
-
-    output_mcperf = stdout_mcperf.read()
-    print(f">> Collecting output from mcperf measure")
-    save_mcperf_logs(output_mcperf)
+    save_memcached_logs(mc_stdout, cores)
 
     # attempting to copy remote log folder to local file system as a n alterantive logging method
 
+    # FIXME: this is not working
     # result = subprocess.run(
-    #     f"{args.gcloud_bin_dir}/gcloud compute scp --scp-flag=-r ubuntu@{memcached_server_name}:/home/ubuntu/part-4-logs . --zone europe-west3-a".split(
+    #     f"{args.gcloud_bin_dir}/gcloud compute scp --scp-flag=-r ubuntu@{memcached_server_name}:/home/ubuntu/part-4-logs ./part-4/ --zone europe-west3-a".split(
     #         " "),
     #     check=True,
     #     stdout=subprocess.PIPE,
@@ -238,54 +237,50 @@ def tear_down_cluster(args):
     print(">> Cluster deleted successfully")
 
 
-def start_mcperf(memcached_ip):
-    client_agent_info = get_node_info("client-agent")
-    client_agent_IP = client_agent_info["INTERNAL-IP"]
+def start_mcperf():
+    memcached_ip = get_node_info("memcache-server")["INTERNAL-IP"]
+    client_agent_IP = get_node_info("client-agent")["INTERNAL-IP"]
 
-    (stdin, stdout, stderr) = client_agent.exec_command("./mcperf -T 16 -A")
-    cmd_output = stdout.read()
+    terminate_mcperf()
+
+    print(">> Starting mcperf on client-agent")
+    client_agent.exec_command("cd memcache-perf-dynamic; ./mcperf -T 16 -A &")
 
     client_measure_command_benchmarking = (
+        f"cd memcache-perf-dynamic;"
         f"./mcperf -s {memcached_ip} --loadonly;"
-        + f"./mcperf -s {memcached_ip} -a {client_agent_IP}"
-        + "--noload -T 16 -C 4 -D 4 -Q 1000 -c 4 -t 5"
+        + f"./mcperf -s {memcached_ip} -a {client_agent_IP} "
+        + "--noload -T 16 -C 4 -D 4 -Q 1000 -c 4 -t 5 "
         + "--scan 5000:125000:5000"
     )
-
-    (stdin, stdout, stderr) = client_measure.exec_command(
+    print(
+        f">> Starting mcperf on client-measure with command: {client_measure_command_benchmarking}")
+    _, mcperf_stdout, mcperf_stderr = client_measure.exec_command(
         client_measure_command_benchmarking)
-    return stdout
+    return mcperf_stdout
 
 
-# timestamp,cluster_name,real_ms,user_ms,sys_ms,throughput
-def append_result_to_csv(args, real, user, sys, n_threads, n_cores):
-    now = datetime.now()
-    # FIXME: why 20?
-    line = f"{now},{args.cluster_name},{real},{user},{sys},20"
+def save_memcached_logs(stdout, cores):
+    output = stdout.read().decode("utf-8")
+    print(">> Saving memcached logs to txt file")
 
-    title = f"memcached_{n_threads}threads_{n_cores}cores.csv"
-    with open(title, "a") as f:
-        f.write(line)
-
-
-def save_mcperf_logs(stdout_mcperf):
-    output = stdout_mcperf.decode("utf-8")
-    print(output)
-    print(">> Saving to txt file")
-
-    txt_filename = f"mcperf-part{args.task}.txt"
+    txt_filename = f"part-4/cores-{cores}/memcached_logs.txt"
 
     with open(txt_filename, "w") as f:
         f.write(output)
 
 
-def save_memcached_logs(stdout_mcperf, cores=2, threads=2):
-    output = stdout_mcperf.decode("utf-8")
-    print(">> Saving memcached logs to txt file")
+def save_mcperf_logs(mcperf_stdout, cores):
+    if mcperf_stdout is None:
+        raise RuntimeError("mcperf stdout is None")
 
-    txt_filename = f"memcache-cores{cores}-threads{threads}.txt"
+    print(">> Reading mcperf logs")
+    output = mcperf_stdout.read().decode("utf-8")
 
-    with open(txt_filename, "w") as f:
+    txt_filename = f"part-4/cores-{cores}/mcperf-output.txt"
+
+    print(f">> Saving mcperf logs to {txt_filename}")
+    with open(txt_filename, 'w') as f:
         f.write(output)
 
 
