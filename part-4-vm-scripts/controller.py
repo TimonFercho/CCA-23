@@ -117,15 +117,7 @@ if __name__ == "__main__":
         type=int,
         help="number of cores ",
         required=True,
-        default=2
-    )
-    parser.add_argument(
-        "-t",
-        "--time",
-        type=int,
-        help="measurement period in seconds ",
-        required=True,
-        default=20
+        default=1
     )
     parser.add_argument(
         "-p",
