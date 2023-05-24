@@ -24,7 +24,7 @@ memcached_server_name = ""
 client_agent_info = memcached_server_info = client_measure_info = {}
 
 
-def connect_mcperfs():
+def connect_mcperfs(args):
     print(">> Setting up SSH connection to compile mcperf")
 
     client_agent_info = get_node_info("client-agent")
@@ -40,19 +40,19 @@ def connect_mcperfs():
         paramiko.AutoAddPolicy()
     )
     client_agent.connect(client_agent_IP, 22,
-                         username="ubuntu")
+                         username="ubuntu",key_filename=args.ssh_key_file)
 
     memcached_server.set_missing_host_key_policy(
         paramiko.AutoAddPolicy()
     )
     memcached_server.connect(
-        memcached_server_IP, 22, username="ubuntu"
+        memcached_server_IP, 22, username="ubuntu",key_filename=args.ssh_key_file
     )
     client_measure.set_missing_host_key_policy(
         paramiko.AutoAddPolicy()
     )
     client_measure.connect(client_measure_IP, 22,
-                           username="ubuntu")
+                           username="ubuntu",key_filename=args.ssh_key_file)
 
 
 def setup_memcached():
@@ -141,8 +141,8 @@ def spin_up_cluster(args):
         print(">> Cluster deployed successfully")
 
 
-def run_part_4(args, setup=True):
-    connect_mcperfs()
+def run_part_4(args, setup=False):
+    connect_mcperfs(args)
     
     if setup:
         setup_memcached()
@@ -154,7 +154,7 @@ def run_part_4(args, setup=True):
     memcached_server_name = memcached_server_info["NAME"]
 
     result = subprocess.run(
-        f"{args.gcloud_bin_dir}/gcloud compute scp --scp-flag=-r part-4-vm-scripts/ ubuntu@{memcached_server_name}:/home/ubuntu/ --zone europe-west3-a".split(
+        f"{args.gcloud_bin_dir}/gcloud compute scp --recursive --scp-flag=-r /part-4-vm-scripts ubuntu@{memcached_server_name}:/home/ubuntu/ --zone europe-west3-a".split(
             " "),
         check=True,
         stdout=subprocess.PIPE,
@@ -468,7 +468,7 @@ if __name__ == "__main__":
         sys.exit(1)
     if args.task == "4":
         create_part4_yaml(args)
-        spin_up_cluster(args)
+        #spin_up_cluster(args)
         run_part_4(args)
         #tear_down_cluster(args)
         #delete_part4_yaml(args)
@@ -476,4 +476,4 @@ if __name__ == "__main__":
         raise ValueError(f"Unknown task {args.task}")
 
 
-# python ./setup-part-4-rest.py --cca-directory .  --user mertugrul --task 4
+# python ./setup-part-4-rest.py --cca-directory . --user mertugrul --task 4
