@@ -105,6 +105,8 @@ def run_part_4(args):
         if schedule is not None:
             schedule.remove_all_containers()
         raise(e)
+    
+    schedule.remove_all_containers()
 
 
 

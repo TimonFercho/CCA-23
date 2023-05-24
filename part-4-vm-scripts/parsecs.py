@@ -86,6 +86,7 @@ class ParsecJob:
         self.interference = interference
         self.started = False
         self.paused = False
+        self.removed = False
         self.accum_runtime = 0
         self.init_time = 0
         self.container = None
@@ -123,11 +124,11 @@ class ParsecJob:
         self.init_time = time.time()
 
     def update_cores(self, cpu_set):
+        self.cores = cpu_set
         cpu_set_str = ','.join(cpu_set)
         self.container.reload()
         self.container.update(cpuset_cpus=cpu_set_str)
         schedule_logger.update_cores(self.name, cores=cpu_set)
-        self.cores = cpu_set
 
     def remove_core(self, core_num):
         self.cores.remove(core_num)
@@ -153,13 +154,17 @@ class ParsecJob:
         schedule_logger.job_unpause(self.name)
 
     def remove(self):
+        if self.removed:
+            return
         if self.container == None:
+            self.removed = True
             return  # already removed
         
         if self.container.status == "exited":
             self.accum_runtime = self.accum_runtime + time.time() - self.init_time
         try:
             self.container.remove()
+            self.removed = True
         except:
             self.container.reload()
             if self.container.status == "paused":
@@ -168,8 +173,9 @@ class ParsecJob:
             if self.container.status == "running":
                 self.container.kill()
                 self.container.remove()
+            self.removed = True
         
-        schedule_logger.job_end(self.name)
+        #schedule_logger.job_end(self.name)
         
 
 class Schedule:
@@ -220,7 +226,8 @@ class Schedule:
 
     def remove_all_containers(self):
         for i , job in enumerate(self.job_list): 
-            self.job_list[i].remove()
+            if not job.removed:
+                self.job_list[i].remove()
 
     def clear_parsecs_on_core(self,core_num):
 
@@ -233,24 +240,29 @@ class Schedule:
                 self.running_jobs[core_int].remove(job_id)
 
     def update_state(self):
+        print("Update state")
         job_ids_to_remove = [[],[],[],[]]
 
-        for core_int in range(1,len(self.running_jobs)): #skip core 0
-            for idx, job_id in enumerate(self.running_jobs[core_int]):
-                self.job_list[job_id].container.reload()
-                if self.job_list[job_id].container.status == "exited":
-                    if not "Done" in str(self.job_list[job_id].container.logs()).split()[-1]:
-                        print(f"JOB FAILED: {self.job_list[job_id].name}")
+        for idx, job in enumerate(self.job_list):
+            if job.removed: return
+            job.container.reload()
+            if job.container.status == "exited":
+                if not "Done" in str(job.container.logs()).split()[-1]:
+                    print(f"JOB FAILED: {job.name}")
 
-                    if job_id not in job_ids_to_remove[core_int]:
-                        self.job_list[job_id].remove()
-                        self.completed_jobs.append(job_id)
-                        job_ids_to_remove[core_int].append(job_id)
-                    #schedule_logger.job_end(self.job_list[job_id].container.name)
-                    #self.running_jobs[core_int].remove(job_id)
+                schedule_logger.job_end(job.name)
+                for core_num in job.cores:
+                    job_ids_to_remove[int(core_num)].append(idx)
+                self.completed_jobs.append(idx)
+        print("job.cores")
+        print(job.cores)
+
+        print("job_ids_to_remove")
+        print(job_ids_to_remove)
+
 
         for core_int in range(1,4): #skip core 0
-            for job_id in enumerate(job_ids_to_remove[core_int]):
+            for job_id in job_ids_to_remove[core_int]:
                 self.running_jobs[core_int].remove(job_id)
 
     
@@ -286,6 +298,11 @@ class Schedule:
         print([self.job_list[job_idx].name for job_idx in self.job_priority_queue])
         print("--------------- RUNNING JOBS -----------------")
         print(self.running_jobs)
+        for core_int in range(1,len(self.running_jobs)): # skipping core 0
+            for idx, job_id in enumerate(self.running_jobs[core_int]):
+                print(f"job: {self.job_list[job_id].name} | cores: {self.job_list[job_id].cores}")
+
+
         print("--------------- PAUSED JOBS -----------------")
         print(self.paused_jobs )
         print("--------------- COMPLETED JOBS -----------------")
@@ -393,6 +410,7 @@ class Schedule:
                 elif resource_demand == 1 and len(remaining_cores) >= 1:
                     # get remaining unassigned cores
                     self.job_list[job_id].update_cores([remaining_cores[0]])
+                    self.job_list[job_id].unpause()
 
                     # avoid modifying list while iterating
                     #self.paused_jobs.remove(job_id)
@@ -470,6 +488,7 @@ class Schedule:
 
                     # for small jobs, we are okay wiht giving them to core 1 if available  with no other preference order
                     self.job_list[job_id].update_cores(remaining_cores[0])
+                    self.job_list[job_id].start()
 
                     # avoid modifying list while iterating
                     #self.job_priority_queue.remove(job_id)
