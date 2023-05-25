@@ -4,7 +4,7 @@ import scheduler_logger
 import time
 import subprocess
 
-schedule_logger = None
+schedule_logger = scheduler_logger.SchedulerLogger()
 
 # number fo max cores allowed to give to a job + runtime values taken from part 2 are used as comparison criteria for ordering jobs
 blackscholes_dict = {"name":"blackscholes",
@@ -201,7 +201,9 @@ class Schedule:
                                                  command=job.command) )
             self.job_list[i].container.reload()
 
-        schedule_logger = scheduler_logger.SchedulerLogger()
+        schedule_logger.start_scheduler()
+
+        schedule_logger.job_start("memcached", list(range(self.mc_cores)), 2)
 
         # these lists store idx s mapping to locations of jobs in job_list
         self.running_jobs = [[],[],[],[]]

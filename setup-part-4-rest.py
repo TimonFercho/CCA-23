@@ -472,8 +472,8 @@ if __name__ == "__main__":
         print(f"Directory {parser.parse_args().cca_directory} does not exist")
         sys.exit(1)
     if args.task == "4":
-        #create_part4_yaml(args)
-        #spin_up_cluster(args)
+        create_part4_yaml(args)
+        spin_up_cluster(args)
         run_part_4(args)
         #tear_down_cluster(args)
         #delete_part4_yaml(args)

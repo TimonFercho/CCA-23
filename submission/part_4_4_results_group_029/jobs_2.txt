@@ -1,257 +1,130 @@
 2023-05-25T01:27:33.282057 start scheduler
-
+2023-05-25T01:27:33.282131 start memcached [0] 2
 2023-05-25T01:27:39.939212 update_cores freqmine [1,2,3]
-
 2023-05-25T01:27:40.248275 start freqmine [1,2,3] 3
-
 2023-05-25T01:27:40.512992 update_cores freqmine [2,3]
-
 2023-05-25T01:27:40.513119 update_cores memcached [0,1]
-
 2023-05-25T01:27:41.188194 update_cores vips [3]
-
 2023-05-25T01:27:41.519795 start vips [3] 1
-
 2023-05-25T01:27:41.979103 pause vips
-
 2023-05-25T01:27:53.740829 update_cores vips [3]
-
 2023-05-25T01:27:53.767700 unpause vips
-
 2023-05-25T01:27:54.224692 pause vips
-
 2023-05-25T01:28:03.511555 update_cores memcached [0]
-
 2023-05-25T01:28:03.556445 update_cores vips [1]
-
 2023-05-25T01:28:03.582777 unpause vips
-
 2023-05-25T01:28:09.444954 pause vips
-
 2023-05-25T01:28:10.747552 update_cores vips []
-
 2023-05-25T01:28:10.747591 update_cores memcached [0,1]
-
 2023-05-25T01:28:13.357953 update_cores memcached [0]
-
 2023-05-25T01:28:14.391479 update_cores vips [1]
-
 2023-05-25T01:28:15.568566 unpause vips
-
 2023-05-25T01:28:18.370933 pause vips
-
 2023-05-25T01:28:18.395346 update_cores vips []
-
 2023-05-25T01:28:18.395396 update_cores memcached [0,1]
-
 2023-05-25T01:28:43.528173 update_cores memcached [0]
-
 2023-05-25T01:28:43.583846 update_cores vips [1]
-
 2023-05-25T01:28:43.618282 unpause vips
-
 2023-05-25T01:28:48.541911 pause vips
-
 2023-05-25T01:28:48.567761 update_cores vips []
-
 2023-05-25T01:28:48.567815 update_cores memcached [0,1]
-
 2023-05-25T01:31:13.812634 update_cores memcached [0]
-
 2023-05-25T01:31:13.852083 update_cores vips [1]
-
 2023-05-25T01:31:13.898557 unpause vips
-
 2023-05-25T01:31:18.391645 pause vips
-
 2023-05-25T01:31:18.447685 update_cores vips []
-
 2023-05-25T01:31:18.447727 update_cores memcached [0,1]
-
 2023-05-25T01:31:50.605504 update_cores memcached [0]
-
 2023-05-25T01:31:50.659129 update_cores vips [1]
-
 2023-05-25T01:31:50.681600 unpause vips
-
 2023-05-25T01:31:53.477701 pause vips
-
 2023-05-25T01:31:53.515814 update_cores vips []
-
 2023-05-25T01:31:53.515866 update_cores memcached [0,1]
-
 2023-05-25T01:31:58.482060 update_cores memcached [0]
-
 2023-05-25T01:31:58.520361 update_cores vips [1]
-
 2023-05-25T01:31:58.548839 unpause vips
-
 2023-05-25T01:32:03.466641 pause vips
-
 2023-05-25T01:32:03.495749 update_cores vips []
-
 2023-05-25T01:32:03.495799 update_cores memcached [0,1]
-
 2023-05-25T01:33:08.626110 update_cores memcached [0]
-
 2023-05-25T01:33:08.674808 update_cores vips [1]
-
 2023-05-25T01:33:08.712445 unpause vips
-
 2023-05-25T01:33:13.438625 pause vips
-
 2023-05-25T01:33:13.487863 update_cores vips []
-
 2023-05-25T01:33:13.487947 update_cores memcached [0,1]
-
 2023-05-25T01:33:42.734059 end freqmine
-
 2023-05-25T01:33:42.993606 update_cores vips [2]
-
 2023-05-25T01:33:43.039756 unpause vips
-
 2023-05-25T01:33:43.054146 update_cores radix [3]
-
 2023-05-25T01:33:43.363295 start radix [3] 1
-
 2023-05-25T01:34:28.513584 update_cores memcached [0]
-
 2023-05-25T01:34:28.526209 update_cores dedup [1]
-
 2023-05-25T01:34:28.823523 start dedup [1] 1
-
 2023-05-25T01:34:37.123218 end radix
-
 2023-05-25T01:34:37.563130 pause dedup
-
 2023-05-25T01:34:37.595200 update_cores dedup []
-
 2023-05-25T01:34:37.595253 update_cores memcached [0,1]
-
 2023-05-25T01:34:37.652993 update_cores dedup [3]
-
 2023-05-25T01:34:37.677443 unpause dedup
-
 2023-05-25T01:34:54.862790 end vips
-
 2023-05-25T01:35:02.953461 end dedup
-
 2023-05-25T01:35:03.165689 update_cores canneal [2,3]
-
 2023-05-25T01:35:03.446941 start canneal [2,3] 3
-
 2023-05-25T01:35:39.044400 update_cores memcached [0]
-
 2023-05-25T01:35:39.422881 update_cores ferret [1,2]
-
 2023-05-25T01:35:39.673102 start ferret [1,2] 2
-
 2023-05-25T01:35:39.891757 update_cores blackscholes [1,2]
-
 2023-05-25T01:35:40.166486 start blackscholes [1,2] 2
-
 2023-05-25T01:35:40.451549 update_cores ferret [2]
-
 2023-05-25T01:35:40.513189 update_cores blackscholes [2]
-
 2023-05-25T01:35:40.513248 update_cores memcached [0,1]
-
 2023-05-25T01:35:40.571697 pause blackscholes
-
 2023-05-25T01:35:40.796961 pause ferret
-
 2023-05-25T01:35:48.477414 update_cores memcached [0]
-
 2023-05-25T01:35:58.384140 update_cores memcached [0,1]
-
 2023-05-25T01:36:24.089277 update_cores memcached [0]
-
 2023-05-25T01:36:29.658859 update_cores memcached [0,1]
-
 2023-05-25T01:36:38.380462 update_cores memcached [0]
-
 2023-05-25T01:36:43.328744 update_cores memcached [0,1]
-
 2023-05-25T01:37:13.621557 update_cores memcached [0]
-
 2023-05-25T01:37:18.361368 update_cores memcached [0,1]
-
 2023-05-25T01:37:28.545851 update_cores memcached [0]
-
 2023-05-25T01:37:33.285188 update_cores memcached [0,1]
-
 2023-05-25T01:37:38.496620 update_cores memcached [0]
-
 2023-05-25T01:37:43.442997 update_cores memcached [0,1]
-
 2023-05-25T01:38:09.712843 end canneal
-
 2023-05-25T01:38:09.972597 update_cores blackscholes [2,3]
-
 2023-05-25T01:38:09.999540 unpause blackscholes
-
 2023-05-25T01:38:23.547460 update_cores memcached [0]
-
 2023-05-25T01:38:23.592523 update_cores ferret [1,3]
-
 2023-05-25T01:38:23.611078 unpause ferret
-
 2023-05-25T01:38:24.068672 update_cores ferret [1]
-
 2023-05-25T01:38:24.318782 update_cores ferret [1,3]
-
 2023-05-25T01:38:24.784937 update_cores ferret [1]
-
 2023-05-25T01:38:25.054839 update_cores ferret [1,3]
-
 2023-05-25T01:38:25.536205 update_cores ferret [1]
-
 2023-05-25T01:38:28.444945 pause ferret
-
 2023-05-25T01:38:28.472678 update_cores ferret []
-
 2023-05-25T01:38:28.472721 update_cores memcached [0,1]
-
 2023-05-25T01:38:58.357803 update_cores memcached [0]
-
 2023-05-25T01:39:03.464090 update_cores memcached [0,1]
-
 2023-05-25T01:39:14.983762 end blackscholes
-
 2023-05-25T01:39:15.194507 update_cores memcached [0]
-
 2023-05-25T01:39:15.232147 update_cores ferret [1,2,3]
-
 2023-05-25T01:39:15.252890 unpause ferret
-
 2023-05-25T01:39:23.451524 update_cores ferret [2,3]
-
 2023-05-25T01:39:23.451568 update_cores memcached [0,1]
-
 2023-05-25T01:39:28.551388 update_cores memcached [0]
-
 2023-05-25T01:39:33.418073 update_cores memcached [0,1]
-
 2023-05-25T01:40:18.484520 update_cores memcached [0]
-
 2023-05-25T01:40:27.000161 update_cores memcached [0,1]
-
 2023-05-25T01:41:18.383001 update_cores memcached [0]
-
 2023-05-25T01:41:23.453784 update_cores memcached [0,1]
-
 2023-05-25T01:41:34.029585 update_cores memcached [0]
-
 2023-05-25T01:41:38.491808 update_cores memcached [0,1]
-
 2023-05-25T01:41:58.407635 update_cores memcached [0]
-
 2023-05-25T01:42:03.476951 update_cores memcached [0,1]
-
 2023-05-25T01:42:23.385227 update_cores memcached [0]
-
 2023-05-25T01:42:28.454799 update_cores memcached [0,1]
-
 2023-05-25T01:42:34.327846 end ferret
-
 2023-05-25T01:42:34.528207 end scheduler

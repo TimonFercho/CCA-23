@@ -22,6 +22,8 @@ class SchedulerLogger:
         start_date = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         self.file = open(f"log{start_date}.txt", "w")
+
+    def start_scheduler(self):
         self._log("start", "scheduler")
 
     def _log(self, event: str, job_name: str, args: str = "") -> None:
