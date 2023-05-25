@@ -31,10 +31,6 @@ def init_memcached_config():
         if process_name in proc.name():
             memcached_pid = proc.pid
             break
-    
-    #command = f"sudo renice -n -19 -p {pid}"
-    #subprocess.run(command.split(" "), stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-    # Set the cpu affinity of memcached to CPU 0
     return set_memcached_cpu( memcached_pid, MEMCACHED_INITIAL_N_CORES)
 
 
@@ -42,7 +38,6 @@ def set_memcached_cpu(pid, no_of_cpus):
     cpu_affinity = ",".join(map(str, range(0, no_of_cpus)))
     #print(f'Setting Memcached CPU affinity to {cpu_affinity}')
     command = f'sudo taskset -a -cp {cpu_affinity} {pid}'
-    #logger.log_memchached_state(no_of_cpus)
     subprocess.run(command.split(" "), stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
     return pid, no_of_cpus
 
@@ -63,8 +58,6 @@ def run_part_4(args):
 
     try:
 
-        #print("in run part 4")
-
         #setting number of cores
         set_memcached_cpu(memcached_pid, args.cores)
         mc_process = psutil.Process(memcached_pid)
@@ -80,20 +73,17 @@ def run_part_4(args):
             all_cpus_util = psutil.cpu_percent(interval=None, percpu=True)
             #mc_util = mc_process.cpu_percent() 
 
-            #memcached_expanded = False
-
             # memcached needs to expand
             if schedule.mc_cores == 1 and all_cpus_util[0] > 50:  
                 schedule.update_for_memcached(mc_cores=2)
                 set_memcached_cpu(memcached_pid, no_of_cpus=2)
-                #memcached_expanded = True
 
             # memcached is allowed to retract
             elif schedule.mc_cores == 2 and  all_cpus_util[0] + all_cpus_util[1] < 40: 
                 set_memcached_cpu(memcached_pid, no_of_cpus=1)
                 schedule.update_for_memcached(mc_cores=1)
 
-            #optmize parsec job scheduling
+            #optimize parsec job scheduling
             schedule.update_internal_parsec(all_cpus_util)
 
             # check currently running jobs, remove containers if jobs are finished
@@ -133,8 +123,6 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
-    #print("in the main of controller.py")
 
     set_pid()
     run_part_4(args)

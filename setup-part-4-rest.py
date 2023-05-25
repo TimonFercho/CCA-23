@@ -141,7 +141,7 @@ def spin_up_cluster(args):
         print(">> Cluster deployed successfully")
 
 
-def run_part_4(args, setup=True, copy_files=False):
+def run_part_4(args, setup=True, copy_files=True):
     connect_mcperfs(args)
     
     if setup:
@@ -205,8 +205,6 @@ def run_policy(cores=1):
 
     print(">> Starting mcperf agent and measure")
     stdout_mcperf = start_mcperf()
-
-    return
 
     print(">> Starting scheduling")
     run_benchmark_cmd = f"sudo python3 /home/ubuntu/part-4-vm-scripts/controller.py --cores {cores} --log-path /home/ubuntu/part-4-logs"
@@ -359,29 +357,6 @@ def get_node_info(node_name_beginning):
         0
     ]
     return node_info
-
-
-def parse_execution_times(result):
-    output = result.stdout.decode("utf-8")
-    lines = [line.strip() for line in output.split("\n")]
-    real, user, sys = None, None, None
-    for line in lines:
-        if line.startswith("real"):
-            real = line.split()[1]
-        elif line.startswith("user"):
-            user = line.split()[1]
-        elif line.startswith("sys"):
-            sys = line.split()[1]
-    return get_total_ms(real), get_total_ms(user), get_total_ms(sys)
-
-
-def get_total_ms(execution_time):
-    mins, seconds_fraction = execution_time.split("m")
-    seconds, fraction = seconds_fraction.split(".")
-    total_seconds = int(mins) * 60 + int(seconds) + \
-        float(fraction.rstrip("s")) / 1000
-    total_ms = int(total_seconds * 1000)
-    return total_ms
 
 
 def create_csv_file(args):

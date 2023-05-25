@@ -6,15 +6,6 @@ import subprocess
 
 schedule_logger = None
 
-ALL_BENCHMARKS = [
-    "blackscholes",
-    "canneal",
-    "dedup",
-    "ferret",
-    "freqmine",
-    "radix",
-    "vips",
-]
 # number fo max cores allowed to give to a job + runtime values taken from part 2 are used as comparison criteria for ordering jobs
 blackscholes_dict = {"name":"blackscholes",
                      "docker_img":"anakli/cca:parsec_blackscholes",
