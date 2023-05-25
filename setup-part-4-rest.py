@@ -141,7 +141,7 @@ def spin_up_cluster(args):
         print(">> Cluster deployed successfully")
 
 
-def run_part_4(args, setup=False):
+def run_part_4(args, setup=True, copy_files=False):
     connect_mcperfs(args)
     
     if setup:
@@ -155,13 +155,14 @@ def run_part_4(args, setup=False):
 
     print(f"gcloud compute scp --scp-flag=-r {args.cca_directory}/part-4-vm-scripts ubuntu@{memcached_server_name}:/home/ubuntu/ --zone europe-west3-a")
 
-    #result = subprocess.run(
-    #    f"gcloud compute scp --scp-flag=-r {args.cca_directory}/part-4-vm-scripts ubuntu@{memcached_server_name}:/home/ubuntu/ --zone europe-west3-a".split(
-    #        " "),
-    #    check=True,
-    #    stdout=subprocess.PIPE,
-    #    stderr=subprocess.PIPE,
-    #)
+    if copy_files:
+        result = subprocess.run(
+            f"gcloud compute scp --scp-flag=-r {args.cca_directory}/part-4-vm-scripts ubuntu@{memcached_server_name}:/home/ubuntu/ --zone europe-west3-a".split(
+                " "),
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
     print(f">> Finished setting up part {args.task}")
 
     # Num cores = 1, beginning CPU measurement script, measuring fro 20 seconds to let mcperf p and end within measruement period
@@ -263,7 +264,7 @@ def start_mcperf():
         f"cd memcache-perf-dynamic;"
         f"./mcperf -s {memcached_ip} --loadonly;"
         + f"./mcperf -s {memcached_ip} -a {client_agent_IP} "
-        + "--noload -T 16 -C 4 -D 4 -Q 1000 -c 4 -t -t 1800 "
+        + "--noload -T 16 -C 4 -D 4 -Q 1000 -c 4 -t 1800 "
         + "--qps_interval 10 --qps_min 5000 --qps_max 100000 --qps_seed 3274"
     )
 
@@ -496,7 +497,7 @@ if __name__ == "__main__":
         print(f"Directory {parser.parse_args().cca_directory} does not exist")
         sys.exit(1)
     if args.task == "4":
-        create_part4_yaml(args)
+        #create_part4_yaml(args)
         #spin_up_cluster(args)
         run_part_4(args)
         #tear_down_cluster(args)

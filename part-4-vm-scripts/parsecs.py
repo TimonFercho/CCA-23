@@ -4,7 +4,7 @@ import scheduler_logger
 import time
 import subprocess
 
-schedule_logger = scheduler_logger.SchedulerLogger()
+schedule_logger = None
 
 ALL_BENCHMARKS = [
     "blackscholes",
@@ -182,7 +182,7 @@ class ParsecJob:
 class Schedule:
     def __init__(self, mc_cores):
 
-        print("creating schedule")
+        #print("creating schedule")
 
         self.mc_cores = mc_cores
 
@@ -210,6 +210,8 @@ class Schedule:
                                                  command=job.command) )
             self.job_list[i].container.reload()
 
+        schedule_logger = scheduler_logger.SchedulerLogger()
+
         # these lists store idx s mapping to locations of jobs in job_list
         self.running_jobs = [[],[],[],[]]
         self.paused_jobs = []
@@ -233,19 +235,24 @@ class Schedule:
     def clear_parsecs_on_core(self,core_num):
 
         core_int = int(core_num)
+        job_idx_to_remove = []
         for idx, job_id in enumerate(self.running_jobs[core_int]):
-            paused = self.job_list[job_id].remove_core(core_num)
-            #paused = self.job_list[idx].remove_core(core_num)
-            if paused:
-                self.paused_jobs.append(job_id)
-                self.running_jobs[core_int].remove(job_id)
+            if core_num in self.job_list[job_id].cores:
+                paused = self.job_list[job_id].remove_core(core_num)
+                #paused = self.job_list[idx].remove_core(core_num)
+                if paused:
+                    self.paused_jobs.append(job_id)
+                job_idx_to_remove.append(job_id)
+
+        for job_id in job_idx_to_remove:
+            self.running_jobs[core_int].remove(job_id)
 
     def update_state(self):
-        print("Update state")
+        #print("Update state")
         job_ids_to_remove = [[],[],[],[]]
 
         for idx, job in enumerate(self.job_list):
-            if job.removed or job.completed: return
+            if job.removed or job.completed: continue
             job.container.reload()
             if job.container.status == "exited":
                 if not "Done" in str(job.container.logs()).split()[-1]:
@@ -255,11 +262,11 @@ class Schedule:
                 for core_num in job.cores:
                     job_ids_to_remove[int(core_num)].append(idx)
                 self.completed_jobs.append(idx)
-        print("job.cores")
-        print(job.cores)
+        #print("job.cores")
+        #print(job.cores)
 
-        print("job_ids_to_remove")
-        print(job_ids_to_remove)
+        #print("job_ids_to_remove")
+        #print(job_ids_to_remove)
 
 
         for core_int in range(1,4): #skip core 0
@@ -295,22 +302,22 @@ class Schedule:
 
     def update_internal_parsec(self, all_cpus_util):
 
-        print("--------------- CURRENT SYSTEM STATUS -----------------")
-        print("--------------- PRIOITY QUEUE -----------------")
-        print([self.job_list[job_idx].name for job_idx in self.job_priority_queue])
-        print("--------------- RUNNING JOBS -----------------")
-        print(self.running_jobs)
-        for core_int in range(1,len(self.running_jobs)): # skipping core 0
-            for idx, job_id in enumerate(self.running_jobs[core_int]):
-                print(f"job: {self.job_list[job_id].name} | cores: {self.job_list[job_id].cores}")
+        #print("--------------- CURRENT SYSTEM STATUS -----------------")
+        #print("--------------- PRIOITY QUEUE -----------------")
+        #print([self.job_list[job_idx].name for job_idx in self.job_priority_queue])
+        #print("--------------- RUNNING JOBS -----------------")
+        #print(self.running_jobs)
+        #for core_int in range(1,len(self.running_jobs)): # skipping core 0
+        #    for idx, job_id in enumerate(self.running_jobs[core_int]):
+        #        print(f"job: {self.job_list[job_id].name} | cores: {self.job_list[job_id].cores}")
 
 
-        print("--------------- PAUSED JOBS -----------------")
-        print(self.paused_jobs )
-        print("--------------- COMPLETED JOBS -----------------")
-        print(self.completed_jobs )
-        print("--------------- ALL CORES CPU -----------------")
-        print(all_cpus_util )
+        #print("--------------- PAUSED JOBS -----------------")
+        #print(self.paused_jobs )
+        #print("--------------- COMPLETED JOBS -----------------")
+        #print(self.completed_jobs )
+        #print("--------------- ALL CORES CPU -----------------")
+        #print(all_cpus_util )
 
 
         # cpu utilizations
@@ -489,7 +496,7 @@ class Schedule:
                     # get remaining unassigned cores
 
                     # for small jobs, we are okay wiht giving them to core 1 if available  with no other preference order
-                    self.job_list[job_id].update_cores(remaining_cores[0])
+                    self.job_list[job_id].update_cores([remaining_cores[0]])
                     self.job_list[job_id].start()
 
                     # avoid modifying list while iterating

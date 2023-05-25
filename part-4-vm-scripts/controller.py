@@ -40,7 +40,7 @@ def init_memcached_config():
 
 def set_memcached_cpu(pid, no_of_cpus):
     cpu_affinity = ",".join(map(str, range(0, no_of_cpus)))
-    print(f'Setting Memcached CPU affinity to {cpu_affinity}')
+    #print(f'Setting Memcached CPU affinity to {cpu_affinity}')
     command = f'sudo taskset -a -cp {cpu_affinity} {pid}'
     #logger.log_memchached_state(no_of_cpus)
     subprocess.run(command.split(" "), stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
@@ -63,7 +63,7 @@ def run_part_4(args):
 
     try:
 
-        print("in run part 4")
+        #print("in run part 4")
 
         #setting number of cores
         set_memcached_cpu(memcached_pid, args.cores)
@@ -75,7 +75,7 @@ def run_part_4(args):
 
         while(not schedule.is_complete()):
 
-            print("in iteration")
+            #print("in iteration")
 
             all_cpus_util = psutil.cpu_percent(interval=None, percpu=True)
             #mc_util = mc_process.cpu_percent() 
@@ -134,7 +134,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    print("in the main of controller.py")
+    #print("in the main of controller.py")
 
     set_pid()
     run_part_4(args)

@@ -37,7 +37,7 @@ class SchedulerLogger:
 
     def job_end(self, job: str) -> None:
 
-        self._log("end", str)
+        self._log("end", job)
 
     def update_cores(self, job: str, cores: list) -> None:
         self._log("update_cores", job, "["+(",".join(str(i) for i in cores))+"]")
